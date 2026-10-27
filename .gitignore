@@ -2,3 +2,4 @@ node_modules
 dist
 *.local
 drive_downloads/
+public/videos/*.mp4

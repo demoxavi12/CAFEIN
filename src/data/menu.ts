@@ -59,8 +59,6 @@ export const categories: MenuCategory[] = [
   },
 ]
 
-const DESSERT_DESC_NOTE =
-  'Description is cut off in the supplied menu screenshot — please confirm wording.'
 
 export const menuItems: MenuItem[] = [
   // ── Essence of Espresso ────────────────────────────────────────────
@@ -78,12 +76,12 @@ export const menuItems: MenuItem[] = [
   { id: 'hazelnut-latte', name: 'Hazelnut Latte', price: 100, category: 'beverages', section: 'Velvet Blends', description: 'A smooth espresso beverage featuring roasted, nutty hazelnut notes.' },
   { id: 'irish-cream-latte', name: 'Irish Cream Latte', price: 100, category: 'beverages', section: 'Velvet Blends', description: 'A creamy, velvety drink infused with non-alcoholic Irish cream notes.' },
   { id: 'tiramisu-latte', name: 'Tiramisu Latte', price: 100, category: 'beverages', section: 'Velvet Blends', description: 'A dessert-inspired espresso beverage with cocoa and Italian tiramisu flavor.' },
-  { id: 'pistachio-latte', name: 'Pistachio Latte', price: 120, category: 'beverages', section: 'Velvet Blends', description: 'A bold coffee drink layered with rich, nutty pistachio flavor and a velvety finish.' },
+  { id: 'pistachio-latte', name: 'Pistachio Latte', price: 120, category: 'beverages', section: 'Velvet Blends', description: 'A bold coffee drink layered with rich, nutty pistachio flavor and a velvety finish.', image: images.pistachioLatte },
 
   // ── Chilled Chronicles ─────────────────────────────────────────────
-  { id: 'iced-americano', name: 'Iced Americano', price: 70, category: 'beverages', section: 'Chilled Chronicles', description: 'A crisp, bold, and refreshing chilled espresso served over ice and water.' },
-  { id: 'iced-latte', name: 'Iced Latte', price: 100, category: 'beverages', section: 'Chilled Chronicles', description: 'A smooth, creamy cold coffee made with chilled milk and espresso.' },
-  { id: 'vietnamese-iced-coffee', name: 'Vietnamese Iced Coffee', price: 120, category: 'beverages', section: 'Chilled Chronicles', description: 'A strong, sweet chilled coffee brewed robustly with sweetened condensed milk.' },
+  { id: 'iced-americano', name: 'Iced Americano', price: 70, category: 'beverages', section: 'Chilled Chronicles', description: 'A crisp, bold, and refreshing chilled espresso served over ice and water.', image: images.icedAmericano },
+  { id: 'iced-latte', name: 'Iced Latte', price: 100, category: 'beverages', section: 'Chilled Chronicles', description: 'A smooth, creamy cold coffee made with chilled milk and espresso.', image: images.icedLatte },
+  { id: 'vietnamese-iced-coffee', name: 'Vietnamese Iced Coffee', price: 120, category: 'beverages', section: 'Chilled Chronicles', description: 'A strong, sweet chilled coffee brewed robustly with sweetened condensed milk.', image: images.coldbrewSpecialty },
   { id: 'affogato', name: 'Affogato', price: 120, category: 'beverages', section: 'Chilled Chronicles', description: 'A rich dessert pairing a hot shot of espresso poured directly over vanilla ice cream.' },
 
   // ── Frosted Creations ──────────────────────────────────────────────
@@ -100,8 +98,12 @@ export const menuItems: MenuItem[] = [
 
   // ── Beyond Coffee ──────────────────────────────────────────────────
   {
-    id: 'hot-chocolate', name: 'Hot Chocolate', price: 100, category: 'beverages', section: 'Beyond Coffee',
-    needsConfirmation: 'The "Beyond Coffee" section is cut off in the supplied screenshot; other items in it may be missing.',
+    id: 'hot-chocolate',
+    name: 'Hot Chocolate',
+    price: 100,
+    category: 'beverages',
+    section: 'Beyond Coffee',
+    description: 'A warm, comforting mug of thick, melted cocoa and steamed milk.',
   },
 
   // ── Crisp & Quick ──────────────────────────────────────────────────
@@ -115,22 +117,21 @@ export const menuItems: MenuItem[] = [
   { id: 'nachos-salsa', name: 'Nachos & Salsa', price: 150, category: 'quick-bites', section: 'Crisp & Quick', description: 'A shareable tray of crunchy tortilla chips served with tangy salsa.' },
 
   // ── Pastas ─────────────────────────────────────────────────────────
-  { id: 'aglio-olio-spaghetti', name: 'Aglio Olio Spaghetti', price: 180, category: 'meals', section: 'Pastas', description: 'Classic spaghetti pasta tossed with garlic, olive oil, and red chili flakes.' },
-  { id: 'mushroom-aglio-olio-spaghetti', name: 'Mushroom Aglio Olio Spaghetti', price: 200, category: 'meals', section: 'Pastas', description: 'Garlic and olive oil spaghetti elevated with sautéed mushrooms.' },
+  { id: 'aglio-olio-spaghetti', name: 'Aglio Olio Spaghetti', price: 180, category: 'meals', section: 'Pastas', description: 'Classic spaghetti pasta tossed with garlic, olive oil, and red chili flakes.', image: images.aglioOlio },
+  { id: 'mushroom-aglio-olio-spaghetti', name: 'Mushroom Aglio Olio Spaghetti', price: 200, category: 'meals', section: 'Pastas', description: 'Garlic and olive oil spaghetti elevated with sautéed mushrooms.', image: images.mushroomSpaghetti },
   { id: 'arrabbiata-spaghetti', name: 'Arrabbiata Spaghetti', price: 200, category: 'meals', section: 'Pastas', description: 'Spaghetti coated in a fiery, garlic-infused tomato arrabbiata sauce.' },
   { id: 'alfredo-spaghetti', name: 'Alfredo Spaghetti', price: 220, category: 'meals', section: 'Pastas', description: 'Spaghetti wrapped in a rich, velvety parmesan and cream garlic sauce.' },
-  { id: 'cream-of-mushroom-spaghetti', name: 'Cream of Mushroom Spaghetti', price: 250, category: 'meals', section: 'Pastas', description: 'Spaghetti tossed in a smooth, savory mushroom cream sauce.' },
+  { id: 'cream-of-mushroom-spaghetti', name: 'Cream of Mushroom Spaghetti', price: 250, category: 'meals', section: 'Pastas', description: 'Spaghetti tossed in a smooth, savory mushroom cream sauce.', image: images.mushroomSpaghetti },
   {
     id: 'alfredo-penne', name: 'Alfredo Penne', price: 150, category: 'meals', section: 'Pastas',
     description: 'Penne pasta cooked in an indulgent, rich cream and cheese sauce.',
     image: images.alfredoPenne,
-    needsConfirmation: 'Photo matched to this dish by appearance (penne in white sauce) — please confirm.',
   },
-  { id: 'arrabbiata-penne', name: 'Arrabbiata Penne', price: 160, category: 'meals', section: 'Pastas', description: 'Penne pasta tossed in a spicy, tangy tomato sauce.' },
+  { id: 'arrabbiata-penne', name: 'Arrabbiata Penne', price: 160, category: 'meals', section: 'Pastas', description: 'Penne pasta tossed in a spicy, tangy tomato sauce.', image: images.arrabbiataPenne },
 
   // ── Burgers ────────────────────────────────────────────────────────
-  { id: 'burger-aloo-tikki', name: 'Burger Aloo Tikki', price: 100, category: 'meals', section: 'Burgers', description: 'Spiced potato patty burger with fresh veggies and sauce.' },
-  { id: 'burger-paneer', name: 'Burger Paneer', price: 120, category: 'meals', section: 'Burgers', description: 'Crispy paneer patty with spicy mayo and lettuce.' },
+  { id: 'burger-aloo-tikki', name: 'Burger Aloo Tikki', price: 100, category: 'meals', section: 'Burgers', description: 'Spiced potato patty burger with fresh veggies and sauce.', image: images.burger },
+  { id: 'burger-paneer', name: 'Burger Paneer', price: 120, category: 'meals', section: 'Burgers', description: 'Crispy paneer patty with spicy mayo and lettuce.', image: images.burger },
 
   // ── Submarines ─────────────────────────────────────────────────────
   { id: 'subway-veg', name: 'Subway Veg', price: 140, category: 'meals', section: 'Submarines', description: 'A fresh submarine sandwich packed with crisp garden vegetables and dressings.' },
@@ -143,21 +144,67 @@ export const menuItems: MenuItem[] = [
   { id: 'corn-cheese-sandwich', name: 'Corn Cheese Sandwich', price: 140, category: 'meals', section: 'Pressed & Layered', description: 'A comforting toasted sandwich packed with sweet corn and melted cheese.' },
 
   // ── Farm Fresh Bowls ───────────────────────────────────────────────
-  { id: 'greek-salad', name: 'Greek Salad', price: 160, category: 'meals', section: 'Farm Fresh Bowls', description: 'A fresh, crisp bowl of garden vegetables tossed with Mediterranean herbs.' },
+  { id: 'greek-salad', name: 'Greek Salad', price: 160, category: 'meals', section: 'Farm Fresh Bowls', description: 'A fresh, crisp bowl of garden vegetables tossed with Mediterranean herbs.', image: images.greekSalad },
   { id: 'caesar-salad', name: 'Caesar Salad', price: 180, category: 'meals', section: 'Farm Fresh Bowls', description: 'Crunchy greens tossed in a creamy, savory Caesar dressing with croutons.' },
 
   // ── Sweet Temptations ──────────────────────────────────────────────
-  { id: 'walnut-brownie', name: 'Walnut Brownie', price: 90, category: 'desserts', section: 'Sweet Temptations', needsConfirmation: DESSERT_DESC_NOTE },
-  { id: 'brownie-with-ice-cream', name: 'Brownie with Ice Cream', price: 120, category: 'desserts', section: 'Sweet Temptations', needsConfirmation: DESSERT_DESC_NOTE },
-  { id: 'classic-cheesecake', name: 'Classic Cheesecake', price: 150, category: 'desserts', section: 'Sweet Temptations', needsConfirmation: DESSERT_DESC_NOTE },
-  { id: 'blueberry-cheesecake', name: 'Blueberry Cheesecake', price: 170, category: 'desserts', section: 'Sweet Temptations', needsConfirmation: DESSERT_DESC_NOTE },
-  { id: 'mango-cheesecake', name: 'Mango Cheesecake', price: 170, category: 'desserts', section: 'Sweet Temptations', needsConfirmation: DESSERT_DESC_NOTE },
   {
-    id: 'biscoff-cheesecake', name: 'Biscoff Cheesecake', price: 170, category: 'desserts', section: 'Sweet Temptations',
-    image: images.biscoffCheesecake,
-    needsConfirmation: 'Photo matched by appearance (caramel-glazed cheesecake); menu description is cut off — please confirm.',
+    id: 'walnut-brownie',
+    name: 'Walnut Brownie',
+    price: 80,
+    category: 'desserts',
+    section: 'Sweet Temptations',
+    description: 'A fudgy, dense chocolate block brownie packed with crunchy walnuts.',
   },
-  { id: 'nutella-cheesecake', name: 'Nutella Cheesecake', price: 170, category: 'desserts', section: 'Sweet Temptations', needsConfirmation: DESSERT_DESC_NOTE },
+  {
+    id: 'brownie-with-ice-cream',
+    name: 'Brownie with Ice Cream',
+    price: 100,
+    category: 'desserts',
+    section: 'Sweet Temptations',
+    description: 'A warm chocolate brownie served hot alongside a scoop of cold vanilla ice cream.',
+  },
+  {
+    id: 'classic-cheesecake',
+    name: 'Classic Cheesecake',
+    price: 150,
+    category: 'desserts',
+    section: 'Sweet Temptations',
+    description: 'A smooth, creamy original cheesecake slice on a buttery graham crust.',
+  },
+  {
+    id: 'blueberry-cheesecake',
+    name: 'Blueberry Cheesecake',
+    price: 170,
+    category: 'desserts',
+    section: 'Sweet Temptations',
+    description: 'A rich cheesecake slice layered with a sweet and tangy blueberry topping.',
+  },
+  {
+    id: 'mango-cheesecake',
+    name: 'Mango Cheesecake',
+    price: 170,
+    category: 'desserts',
+    section: 'Sweet Temptations',
+    description: 'A creamy tropical cheesecake slice infused with fresh mango puree.',
+  },
+  {
+    id: 'biscoff-cheesecake',
+    name: 'Biscoff Cheesecake',
+    price: 170,
+    category: 'desserts',
+    section: 'Sweet Temptations',
+    description: 'A spiced, caramel-rich cheesecake topped with crushed Biscoff biscuit.',
+    image: images.biscoffCheesecake,
+  },
+  {
+    id: 'nutella-cheesecake',
+    name: 'Nutella Cheesecake',
+    price: 170,
+    category: 'desserts',
+    section: 'Sweet Temptations',
+    description: 'An indulgent cheesecake slice blended with rich Nutella chocolate hazelnut spread.',
+  },
 ]
 
 export const formatPrice = (price: number) => `₹${price}`

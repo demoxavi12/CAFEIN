@@ -272,6 +272,30 @@
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
+
+  @keyframes culinary-shimmer {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(100%);
+    }
+  }
+  .animate-shimmer {
+    animation: culinary-shimmer 2.4s infinite cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  @keyframes pulse-subtle {
+    0%, 100% {
+      opacity: 0.4;
+    }
+    50% {
+      opacity: 0.85;
+    }
+  }
+  .animate-pulse-subtle {
+    animation: pulse-subtle 3s infinite ease-in-out;
+  }
 }
 
 /* Lenis */

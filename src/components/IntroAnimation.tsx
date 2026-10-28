@@ -1,194 +1,234 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { LogoMedallion } from './LogoMedallion'
 import { images } from '../data/images'
 import { business } from '../data/business'
-import { EASE_CINEMA, EASE_OUT } from '../lib/motion'
+import { EASE_CINEMA } from '../lib/motion'
 import { lockScroll, unlockScroll } from '../lib/scroll'
-import { INTRO_SEEN_KEY } from '../lib/intro'
-
-/** Total time on screen before the curtain lifts (ms) */
-const HOLD_MS = 2900
-const HOLD_REDUCED_MS = 1100
-/** Never wait longer than this for the lantern photo */
-const IMAGE_TIMEOUT_MS = 1200
 
 interface Props {
-  /** Fires when the curtain starts lifting — the hero begins its entrance */
   onReveal: () => void
-  /** Fires once the overlay has fully left */
   onDone: () => void
 }
 
-const letters = ['C', 'A', 'F', 'E', '!', 'N']
+interface PhotoTile {
+  front: string
+  back: string
+  layoutId?: string
+}
 
-/**
- * "The Cinematic Reveal" — near-black room, warm glow, a lantern photograph
- * unmasking from a slit of light, the CAFE!N wordmark rising letter by letter,
- * then the curtain lifts into the hero. ~3.6s; skippable; reduced-motion aware.
- */
+// The public/photos folder is absent in this checkout. These paths point to the
+// available genuine photo assets already in public/images.
+const PHOTO_SET = [
+  images.lantern.src,
+  images.burger.src,
+  images.greekSalad.src,
+  images.diningRoom.src,
+  images.mushroomSpaghetti.src,
+  images.pistachioLatte.src,
+  images.muralWall.src,
+  images.icedAmericano.src,
+  '/images/IMG-20260804-WA0026(1).jpg.jpeg',
+  images.buddha.src,
+  images.alfredoPenne.src,
+  images.biscoffCheesecake.src,
+  '/images/Screenshot_20260830_180733.jpg.jpeg',
+  '/images/Screenshot_20260830_180741.jpg.jpeg',
+  '/images/Screenshot_20260830_180745.jpg.jpeg',
+  images.arrabbiataPenne.src,
+  images.coldbrewSpecialty.src,
+  images.icedLatte.src,
+]
+
+const TILES: PhotoTile[] = Array.from({ length: 9 }, (_, index) => ({
+  front: PHOTO_SET[index],
+  back: PHOTO_SET[index + 9],
+  layoutId: index === 0 ? 'photo-lantern' : index === 3 ? 'photo-dining' : index === 6 ? 'photo-mural' : undefined,
+}))
+
+const ENTRY = [
+  [-80, -45], [0, -100], [90, -48], [-100, 0], [0, 100], [100, 4], [-82, 55], [-8, 100], [85, 52],
+]
+const TILT = [-2.4, 1.8, -1.3, 1.2, -0.7, 2.1, -1.8, 1.4, -2.2]
+const FLIP_INTERVALS = [820, 660, 530, 420, 330, 250, 180, 125]
+const FINISH_MS = 9200
+
 export function IntroAnimation({ onReveal, onDone }: Props) {
   const reduce = useReducedMotion()
   const [visible, setVisible] = useState(true)
-  const [imgState, setImgState] = useState<'loading' | 'ready' | 'skip'>('loading')
-  const revealed = useRef(false)
+  const [tileCount, setTileCount] = useState(3)
+  const [flip, setFlip] = useState(0)
+  const [reveal, setReveal] = useState(false)
+  const [logoVisible, setLogoVisible] = useState(false)
+  const [flash, setFlash] = useState(false)
+  const [failed, setFailed] = useState<Set<string>>(() => new Set())
+  const finished = useRef(false)
   const skipRef = useRef<HTMLButtonElement>(null)
 
   const finish = useCallback(() => {
-    if (revealed.current) return
-    revealed.current = true
-    try {
-      sessionStorage.setItem(INTRO_SEEN_KEY, '1')
-    } catch {
-      /* storage unavailable — fine */
-    }
+    if (finished.current) return
+    finished.current = true
     onReveal()
     setVisible(false)
   }, [onReveal])
 
-  // Lock scroll while the overlay is up
   useEffect(() => {
     lockScroll()
     return unlockScroll
   }, [])
 
-  // Lantern image: wait briefly, then continue without it
-  useEffect(() => {
-    const img = new Image()
-    let settled = false
-    const timer = window.setTimeout(() => {
-      if (!settled) setImgState('skip')
-      settled = true
-    }, IMAGE_TIMEOUT_MS)
-    img.onload = () => {
-      if (!settled) setImgState('ready')
-      settled = true
-    }
-    img.onerror = () => {
-      if (!settled) setImgState('skip')
-      settled = true
-    }
-    img.src = images.lantern.src
-    return () => window.clearTimeout(timer)
-  }, [])
-
-  // Timeline starts as soon as the image question is settled
-  useEffect(() => {
-    if (imgState === 'loading') return
-    const t = window.setTimeout(finish, reduce ? HOLD_REDUCED_MS : HOLD_MS)
-    return () => window.clearTimeout(t)
-  }, [imgState, reduce, finish])
-
-  // Escape skips; focus the skip control for keyboard users
   useEffect(() => {
     skipRef.current?.focus({ preventScroll: true })
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') finish()
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') finish()
     }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [finish])
 
-  const go = imgState !== 'loading'
-  const showImg = imgState === 'ready'
+    if (reduce) {
+      const timer = window.setTimeout(finish, 350)
+      return () => {
+        window.clearTimeout(timer)
+        window.removeEventListener('keydown', onKey)
+      }
+    }
+
+    const timers: number[] = [
+      window.setTimeout(() => setTileCount(6), 480),
+      window.setTimeout(() => setTileCount(9), 1120),
+    ]
+    let round = 0
+    const flipNext = () => {
+      const timer = window.setTimeout(() => {
+        round += 1
+        setFlip(round)
+        if (round < FLIP_INTERVALS.length) {
+          flipNext()
+        } else {
+          timers.push(window.setTimeout(() => {
+            setReveal(true)
+            setFlash(true)
+            setLogoVisible(true)
+          }, 160))
+          timers.push(window.setTimeout(() => setFlash(false), 310))
+        }
+      }, FLIP_INTERVALS[round])
+      timers.push(timer)
+    }
+    timers.push(window.setTimeout(flipNext, 1700))
+    timers.push(window.setTimeout(finish, FINISH_MS))
+
+    return () => {
+      timers.forEach(window.clearTimeout)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [finish, reduce])
+
+  const showLogo = reduce || logoVisible
 
   return (
     <AnimatePresence onExitComplete={onDone}>
       {visible && (
         <motion.div
-          key="intro"
-          className="fixed inset-0 z-[80] flex items-center justify-center overflow-hidden bg-espresso"
-          initial={{ clipPath: 'inset(0% 0% 0% 0%)' }}
-          exit={reduce ? { opacity: 0 } : { clipPath: 'inset(0% 0% 100% 0%)' }}
-          transition={{ duration: reduce ? 0.5 : 1.1, ease: EASE_CINEMA }}
-          aria-label="Cafe In introduction"
+          className="cafe-intro fixed inset-0 z-[80] isolate overflow-hidden bg-espresso text-ivory"
+          initial={{ opacity: 1 }}
+          exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 1.01 }}
+          transition={{ duration: reduce ? 0.12 : 1.2, ease: EASE_CINEMA }}
           role="region"
+          aria-label="Cafe In cinematic introduction"
         >
-          {/* Warm atmospheric light */}
+          <div className="cafe-intro-vignette pointer-events-none absolute inset-0" />
+
+          {!reduce && (
+            <div className="cafe-photo-wall absolute inset-0" aria-hidden="true">
+              {TILES.slice(0, tileCount).map((tile, index) => {
+                const axis = index % 3 === 1 ? 'rotateX' : 'rotateY'
+                const faceAngle = flip % 2 ? 180 : 0
+                const isHeroTile = Boolean(tile.layoutId)
+                const [fromX, fromY] = ENTRY[index]
+                return (
+                  <motion.figure
+                    key={tile.front}
+                    layoutId={tile.layoutId}
+                    className="cafe-photo-tile"
+                    style={{ zIndex: index + 1 }}
+                    initial={{ opacity: 0, x: fromX, y: fromY, scale: 0.72, rotate: TILT[index] * 2 }}
+                    animate={reveal
+                      ? { opacity: isHeroTile ? 1 : 0, x: 0, y: 0, scale: isHeroTile ? 1 : 0.72, rotate: isHeroTile ? 0 : TILT[index] * 2 }
+                      : {
+                          opacity: 1,
+                          x: 0,
+                          y: 0,
+                          scale: [1.02 + (index % 3) * 0.02, 1.06 + (index % 3) * 0.02, 1.03 + (index % 3) * 0.02],
+                          rotate: [TILT[index], TILT[index] + (index % 2 ? 0.65 : -0.65), TILT[index]],
+                        }}
+                    transition={reveal
+                      ? { duration: 0.75, delay: index * 0.025, ease: EASE_CINEMA }
+                      : { duration: 0.72, delay: index * 0.065, ease: EASE_CINEMA, repeat: Infinity, repeatType: 'mirror' }}
+                  >
+                    <motion.div
+                      className="cafe-photo-tile-flipper"
+                      animate={{ [axis]: faceAngle }}
+                      transition={{ duration: FLIP_INTERVALS[Math.min(flip, FLIP_INTERVALS.length - 1)] / 1000, delay: index * 0.018, ease: EASE_CINEMA }}
+                    >
+                      <div className="cafe-photo-tile-face">
+                        {!failed.has(tile.front) && (
+                          <img
+                            src={tile.front}
+                            alt=""
+                            decoding="async"
+                            loading="eager"
+                            fetchPriority={index === 0 ? 'high' : 'low'}
+                            onError={() => setFailed((current) => new Set(current).add(tile.front))}
+                          />
+                        )}
+                      </div>
+                      <div className="cafe-photo-tile-face cafe-photo-tile-back" style={{ transform: axis === 'rotateX' ? 'rotateX(180deg)' : 'rotateY(180deg)' }}>
+                        {!failed.has(tile.back) && (
+                          <img
+                            src={tile.back}
+                            alt=""
+                            decoding="async"
+                            loading="eager"
+                            fetchPriority="low"
+                            onError={() => setFailed((current) => new Set(current).add(tile.back))}
+                          />
+                        )}
+                      </div>
+                    </motion.div>
+                  </motion.figure>
+                )
+              })}
+            </div>
+          )}
+
+          {showLogo && (
+            <motion.div
+              className="absolute top-1/2 left-1/2 z-40 w-[clamp(210px,54vw,360px)] -translate-x-1/2 -translate-y-1/2"
+              initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.64, filter: 'blur(14px)' }}
+              animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+              transition={{ duration: reduce ? 0.2 : 0.72, ease: EASE_CINEMA }}
+            >
+              <LogoMedallion play layoutId="cafe-in-logo" />
+              <p className="label mt-5 text-center text-ivory-2">{business.tagline}</p>
+            </motion.div>
+          )}
+
           <motion.div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background:
-                'radial-gradient(60% 50% at 50% 45%, rgba(117,81,61,0.30) 0%, rgba(48,35,30,0.4) 45%, rgba(48,35,30,0) 75%)',
-            }}
+            className="pointer-events-none absolute inset-0 z-50 bg-[#fff4df]"
             initial={{ opacity: 0 }}
-            animate={{ opacity: go ? 1 : 0 }}
-            transition={{ duration: 1.4, ease: EASE_OUT }}
+            animate={{ opacity: flash ? 0.9 : 0 }}
+            transition={{ duration: flash ? 0.075 : 0.18, ease: 'linear' }}
           />
-
-          <div className="relative flex flex-col items-center">
-            {/* Lantern unmasking from a slit of light */}
-            {showImg && (
-              <motion.div
-                aria-hidden="true"
-                className="relative h-[46vh] max-h-[440px] w-[min(62vw,280px)] overflow-hidden"
-                initial={reduce ? { opacity: 0 } : { clipPath: 'inset(50% 49% 50% 49%)', opacity: 0.6 }}
-                animate={reduce ? { opacity: 1 } : { clipPath: 'inset(0% 0% 0% 0%)', opacity: 1 }}
-                transition={{ duration: 1.6, ease: EASE_CINEMA, delay: 0.25 }}
-              >
-                <motion.img
-                  src={images.lantern.src}
-                  alt=""
-                  className="frame-img"
-                  style={{ objectPosition: images.lantern.focus }}
-                  initial={reduce ? false : { scale: 1.35, filter: 'brightness(0.4)' }}
-                  animate={reduce ? undefined : { scale: 1.05, filter: 'brightness(1)' }}
-                  transition={{ duration: 2.6, ease: EASE_OUT, delay: 0.25 }}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-espresso via-transparent to-espresso/30" />
-              </motion.div>
-            )}
-
-            {/* Wordmark */}
-            <p
-              className={`flex items-baseline font-sans font-semibold tracking-[0.14em] text-ivory ${
-                showImg ? '-mt-10 text-[clamp(3rem,14vw,7.5rem)]' : 'text-[clamp(3.4rem,16vw,9rem)]'
-              }`}
-              aria-label="Cafe In"
-            >
-              {letters.map((l, i) => (
-                <span key={i} aria-hidden="true" className="inline-block overflow-hidden leading-[1.05]">
-                  <motion.span
-                    className={`inline-block ${l === '!' ? 'text-bronze-light' : ''}`}
-                    initial={reduce ? { opacity: 0 } : { y: '105%' }}
-                    animate={go ? (reduce ? { opacity: 1 } : { y: '0%' }) : undefined}
-                    transition={{ duration: 1.1, ease: EASE_OUT, delay: (showImg ? 1.0 : 0.3) + i * 0.07 }}
-                  >
-                    {l}
-                  </motion.span>
-                </span>
-              ))}
-            </p>
-
-            <motion.p
-              className="label mt-4 text-ivory-2"
-              initial={{ opacity: 0, letterSpacing: '0.5em' }}
-              animate={go ? { opacity: 1, letterSpacing: '0.32em' } : undefined}
-              transition={{ duration: 1.4, ease: EASE_OUT, delay: showImg ? 1.55 : 0.8 }}
-            >
-              {business.tagline}
-            </motion.p>
-          </div>
 
           <button
             ref={skipRef}
             type="button"
             onClick={finish}
-            className="label absolute right-5 bottom-6 z-10 inline-flex min-h-11 items-center gap-2 rounded-full border border-ivory/25 px-5 text-ivory/80 transition-colors hover:border-ivory hover:text-ivory sm:top-6 sm:bottom-auto"
+            className="label absolute right-5 bottom-6 z-[60] inline-flex min-h-11 items-center rounded-full border border-ivory/35 bg-espresso/55 px-5 text-ivory transition-colors hover:border-ivory sm:top-6 sm:bottom-auto"
           >
-            Skip intro <span aria-hidden="true">→</span>
+            Skip Intro <span aria-hidden="true" className="ml-2">→</span>
           </button>
-
-          {/* Progress hairline */}
-          {!reduce && go && (
-            <motion.span
-              aria-hidden="true"
-              className="absolute bottom-0 left-0 h-px w-full origin-left bg-mocha"
-              initial={{ scaleX: 0 }}
-              animate={{ scaleX: 1 }}
-              transition={{ duration: HOLD_MS / 1000, ease: 'linear' }}
-            />
-          )}
         </motion.div>
       )}
     </AnimatePresence>

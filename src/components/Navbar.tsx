@@ -97,6 +97,17 @@ export function Navbar() {
         </ul>
 
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              window.history.pushState({}, '', '?view=menu')
+              window.dispatchEvent(new Event('popstate'))
+            }}
+            className={`hidden sm:inline-flex items-center gap-1.5 rounded-full border border-bronze/40 bg-bronze/10 px-3.5 py-2 text-xs font-semibold tracking-wider text-bronze uppercase hover:bg-bronze hover:text-espresso transition-all ${open ? 'invisible' : ''}`}
+            title="Open the In-Café QR Digital Menu"
+          >
+            <span>📱 In-Café Menu</span>
+          </button>
           <a href="#menu" onClick={go('menu')} className={`btn btn-primary hidden min-h-11 sm:inline-flex ${open ? 'invisible' : ''}`}>
             Explore Menu
           </a>
@@ -172,6 +183,17 @@ export function Navbar() {
               animate={{ opacity: 1, y: 0, transition: { delay: reduceMotion ? 0 : 0.2, duration: reduceMotion ? 0 : 0.4 } }}
               exit={{ opacity: 0 }}
             >
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false)
+                  window.history.pushState({}, '', '?view=menu')
+                  window.dispatchEvent(new Event('popstate'))
+                }}
+                className="btn btn-ghost w-full border border-bronze/40 text-bronze uppercase tracking-wider text-xs"
+              >
+                📱 Open In-Café QR Menu
+              </button>
               <a href="#menu" onClick={go('menu')} className="btn btn-primary w-full">
                 Explore Menu
               </a>

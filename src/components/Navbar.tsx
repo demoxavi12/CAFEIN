@@ -13,7 +13,7 @@ import { Wordmark } from './Wordmark'
 const sectionIds = ['top', 'specials', 'menu', 'story', 'gallery', 'reviews', 'visit']
 
 export function Navbar() {
-  const [scrolled, setScrolled] = useState(false)
+  const [scrolled, setScrolled] = useState(() => typeof window !== 'undefined' && window.scrollY > 40)
   const [open, setOpen] = useState(false)
   const active = useActiveSection(sectionIds)
   const toggleRef = useRef<HTMLButtonElement>(null)
@@ -74,7 +74,7 @@ export function Navbar() {
       <nav
         aria-label="Primary"
         className={`flex h-16 items-center justify-between rounded-full transition-[background-color,border-color,box-shadow,margin,padding] duration-500 ease-[var(--ease-out-soft)] ${
-          scrolled && !open ? 'glass glass-nav mt-2 -mx-2 pr-2 pl-4 sm:-mx-3 sm:pl-5 lg:mt-3' : 'glass glass-nav mt-1 border border-ivory/10 lg:mt-2 lg:h-[72px]'
+          scrolled && !open ? 'glass glass-nav mt-2 -mx-2 pr-2 pl-4 sm:-mx-3 sm:pl-5 lg:mt-3' : 'glass glass-nav mt-1 border border-ivory/10 pr-2 pl-4 sm:pl-5 lg:mt-2 lg:h-[72px]'
         }`}
       >
         <a href="#top" onClick={go('top')} className="relative z-10 text-lg text-ivory sm:text-xl">

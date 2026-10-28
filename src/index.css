@@ -224,6 +224,48 @@
     scroll-padding-inline: var(--track-inset);
     touch-action: pan-x pan-y;
   }
+  .specials-track {
+    --special-card-width: min(72vw, 340px);
+    position: relative;
+    height: 650px;
+    overflow: hidden;
+    padding: 0;
+    list-style: none;
+    touch-action: pan-y;
+    perspective: 1200px;
+  }
+  .specials-card {
+    position: absolute;
+    top: 0.5rem;
+    left: 50%;
+    width: var(--special-card-width);
+    height: calc(100% - 1rem);
+    margin-left: calc(var(--special-card-width) / -2);
+    transform-style: preserve-3d;
+    will-change: transform, opacity;
+  }
+  .hero-ember.hero-ember--warm {
+    background: radial-gradient(circle, rgba(255, 210, 143, 0.98), rgba(245, 147, 58, 0.58) 44%, transparent 78%);
+    box-shadow: 0 0 11px rgba(245, 153, 61, 0.4);
+  }
+  @media (min-width: 640px) and (max-width: 1023px) {
+    .specials-track {
+      --special-card-width: min(35vw, 320px);
+      height: 670px;
+    }
+  }
+  @media (min-width: 1024px) {
+    .specials-track {
+      --special-card-width: clamp(260px, 25vw, 340px);
+      height: 720px;
+    }
+  }
+  @media (max-width: 1023px) {
+    .specials-card[data-slot='-2'],
+    .specials-card[data-slot='2'] {
+      visibility: hidden;
+    }
+  }
   @media (hover: hover) and (pointer: fine) {
     .carousel-track {
       cursor: grab;
@@ -266,11 +308,46 @@
     height: 100%;
     object-fit: cover;
   }
+  .hero-ember {
+    position: absolute;
+    bottom: -3%;
+    left: var(--ember-left);
+    width: var(--ember-size);
+    aspect-ratio: 1;
+    border-radius: 9999px;
+    background: radial-gradient(circle, rgba(255, 203, 132, 0.95), rgba(235, 143, 63, 0.52) 42%, transparent 76%);
+    box-shadow: 0 0 8px rgba(242, 158, 76, 0.3);
+    animation: cafe-hero-ember-rise var(--ember-duration) linear var(--ember-delay) infinite;
+    will-change: transform, opacity;
+  }
+  @keyframes cafe-hero-ember-rise {
+    0% { transform: translate3d(0, 0, 0) scale(0.55); opacity: 0; }
+    12% { opacity: var(--ember-glow); }
+    68% { opacity: 0.22; }
+    100% { transform: translate3d(var(--ember-drift), -110svh, 0) scale(1.15); opacity: 0; }
+  }
   .cafe-intro-vignette {
     z-index: 20;
     background:
       radial-gradient(ellipse at center, rgba(23, 19, 15, 0.02) 10%, rgba(23, 19, 15, 0.52) 100%),
       linear-gradient(180deg, rgba(23, 19, 15, 0.18), rgba(23, 19, 15, 0.4));
+  }
+  .cafe-film-stage {
+    background: var(--color-espresso);
+  }
+  .cafe-film-video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    background: var(--color-espresso);
+  }
+  .cafe-film-grade {
+    background:
+      linear-gradient(180deg, rgba(23, 19, 15, 0.24), rgba(23, 19, 15, 0.08) 46%, rgba(23, 19, 15, 0.42)),
+      radial-gradient(ellipse at center, transparent 42%, rgba(23, 19, 15, 0.3));
   }
   .cafe-photo-wall {
     z-index: 1;
@@ -370,5 +447,9 @@ html.lenis body {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+  .hero-ember {
+    animation: none !important;
+    opacity: 0;
   }
 }

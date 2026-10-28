@@ -18,7 +18,7 @@ interface Props {
  * it once as a quiet brand signature.
  */
 export function LogoMedallion({ play, delay = 0, className = '', decorative = false, layoutId }: Props) {
-  const logo = images.logo
+  const logo = images.logoMedallion
   const reduceMotion = useReducedMotion()
   return (
     <motion.div

@@ -32,15 +32,19 @@ export function useCarousel(count: number) {
     visible: 1,
   })
 
-  /** Scroll offsets at which each slide sits at the start edge, clamped to what is reachable */
+  /** Centered scroll offsets for each slide, clamped to what is reachable */
   const stops = useCallback(() => {
     const track = trackRef.current
     if (!track) return []
     const slides = Array.from(track.children) as HTMLElement[]
     if (!slides.length) return []
-    const origin = slides[0].offsetLeft
     const max = track.scrollWidth - track.clientWidth
-    return slides.map((s) => Math.min(Math.max(0, s.offsetLeft - origin), max))
+    const origin = slides[0].offsetLeft
+    return slides.map((slide) => {
+      const relativeLeft = slide.offsetLeft - origin
+      const centeredLeft = relativeLeft + slide.offsetWidth / 2 - track.clientWidth / 2
+      return Math.min(Math.max(0, centeredLeft), max)
+    })
   }, [])
 
   const measure = useCallback(() => {

@@ -4,8 +4,10 @@ import { formatPrice, type MenuItem } from '../data/menu'
 import { SectionHeading } from '../components/SectionHeading'
 import { RevealImage } from '../components/RevealImage'
 import { ConfirmFlag } from '../components/ConfirmFlag'
-import { useCarousel } from '../hooks/useCarousel'
+import { useMediaQuery } from '../hooks/useMediaQuery'
+import { EmberBackground } from '../components/EmberBackground'
 import { EASE_OUT } from '../lib/motion'
+import { useEffect, useRef, useState, type PointerEvent, type TouchEvent } from 'react'
 
 interface Props {
   onSelect: (item: MenuItem) => void
@@ -15,13 +17,26 @@ interface Props {
 const panelTones = ['bg-mocha', 'bg-espresso-2']
 const pad = (n: number) => String(n).padStart(2, '0')
 
-function SpecialCard({ item, index, total, tone, onSelect }: { item: MenuItem; index: number; total: number; tone: string; onSelect: (item: MenuItem) => void }) {
+function SpecialCard({ item, index, total, tone, onSelect, slot, visible, stepVw, reduceMotion }: { item: MenuItem; index: number; total: number; tone: string; onSelect: (item: MenuItem) => void; slot: number; visible: boolean; stepVw: number; reduceMotion: boolean }) {
   const label = `${item.name}, ${formatPrice(item.price)}${item.needsConfirmation ? ' (details to be confirmed)' : ''} — view details`
   return (
-    <li
+    <motion.li
       aria-roledescription="slide"
       aria-label={`${index + 1} of ${total}: ${item.name}`}
-      className="w-[min(80vw,340px)] shrink-0 snap-start sm:w-[min(46vw,360px)] lg:w-[clamp(300px,26vw,384px)]"
+      aria-hidden={!visible}
+      inert={!visible}
+      data-slot={slot}
+      className="specials-card"
+      initial={false}
+      animate={{
+        x: `${slot * stepVw}vw`,
+        scale: slot === 0 ? 1 : Math.abs(slot) === 1 ? 0.84 : 0.7,
+        rotate: slot === 0 ? 0 : slot * -3,
+        y: slot === 0 ? 0 : Math.abs(slot) === 1 ? 12 : 25,
+        opacity: visible ? 1 : 0,
+        zIndex: 5 - Math.abs(slot),
+      }}
+      transition={{ duration: reduceMotion ? 0 : 0.65, ease: EASE_OUT }}
     >
       <motion.article
         className="group relative flex h-full flex-col rounded-sm ring-bronze ring-offset-4 ring-offset-espresso-2 has-[button:focus-visible]:ring-2"
@@ -74,8 +89,8 @@ function SpecialCard({ item, index, total, tone, onSelect }: { item: MenuItem; i
             <span className="display shrink-0 pt-5 text-[1.7rem] text-ivory-2">{formatPrice(item.price)}</span>
           </div>
           {/* Two-line slot keeps every card the same height */}
-          <p className={`mt-3 line-clamp-2 min-h-[3.25em] text-sm leading-relaxed ${item.description ? 'text-ivory-2' : 'text-ivory/55 italic'}`}>
-            {item.description ?? 'Description to be confirmed by Cafe In.'}
+          <p aria-hidden={!item.description} className={`mt-3 line-clamp-2 min-h-[3.25em] text-sm leading-relaxed ${item.description ? 'text-ivory-2' : 'text-transparent'}`}>
+            {item.description ?? '\u00a0'}
           </p>
           <div className="mt-5 flex items-center justify-between gap-3 border-t border-ivory/15 pt-4">
             {item.needsConfirmation ? <ConfirmFlag note={item.needsConfirmation} tone="light" /> : <span />}
@@ -88,7 +103,7 @@ function SpecialCard({ item, index, total, tone, onSelect }: { item: MenuItem; i
           </div>
         </div>
       </motion.article>
-    </li>
+    </motion.li>
   )
 }
 
@@ -109,28 +124,99 @@ function Arrow({ dir }: { dir: 'prev' | 'next' }) {
 
 export function SignatureSpecials({ onSelect }: Props) {
   const total = featuredItems.length
-  const { trackRef, state, step } = useCarousel(total)
+  const [activeIndex, setActiveIndex] = useState(0)
+  const step = (direction: 1 | -1) => setActiveIndex((current) => (current + direction + total) % total)
+  const supportsEdgePointer = useMediaQuery('(hover: hover) and (pointer: fine)')
+  const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
+  const compact = useMediaQuery('(max-width: 639px)')
+  const tablet = useMediaQuery('(min-width: 640px) and (max-width: 1023px)')
+  const edgePointer = useRef({ x: 0, armed: true })
+  const edgeAdvanceTimer = useRef<number | null>(null)
+  const pendingEdgeDirection = useRef<1 | -1 | 0>(0)
+  const touchStartX = useRef<number | null>(null)
   let typographic = 0
   const tones = featuredItems.map((item) => (item.image ? '' : panelTones[typographic++ % panelTones.length]))
-  const range = state.first === state.last ? pad(state.first + 1) : `${pad(state.first + 1)}–${pad(state.last + 1)}`
-  const canScroll = !(state.atStart && state.atEnd)
+  const visibleSlots = compact || tablet ? 1 : 2
+  const stepVw = compact ? 39 : tablet ? 31 : 21
+  const canScroll = total > 1
+
+  useEffect(() => () => {
+    if (edgeAdvanceTimer.current !== null) window.clearTimeout(edgeAdvanceTimer.current)
+  }, [])
+
+  const handlePointerMove = (event: PointerEvent<HTMLUListElement>) => {
+    const track = event.currentTarget
+    const bounds = track.getBoundingClientRect()
+    const x = event.clientX - bounds.left
+    const delta = x - edgePointer.current.x
+    edgePointer.current.x = x
+    if (!supportsEdgePointer || reduceMotion || event.pointerType !== 'mouse' || track.dataset.dragging) return
+
+    const zone = Math.min(64, bounds.width * 0.09)
+    if (x > zone * 1.6 && x < bounds.width - zone * 1.6) edgePointer.current.armed = true
+
+    const direction: -1 | 0 | 1 = x <= zone ? -1 : x >= bounds.width - zone ? 1 : 0
+    if (!direction) {
+      cancelEdgeAdvance()
+      return
+    }
+    if (edgeAdvanceTimer.current !== null && pendingEdgeDirection.current !== direction) {
+      cancelEdgeAdvance()
+      edgePointer.current.armed = true
+    }
+    if ((event.target as HTMLElement).closest('[aria-roledescription="slide"]')) {
+      cancelEdgeAdvance()
+      return
+    }
+    if (edgePointer.current.armed === false) return
+    if ((direction < 0 && delta > -6) || (direction > 0 && delta < 6)) return
+
+    edgePointer.current.armed = false
+    pendingEdgeDirection.current = direction
+    edgeAdvanceTimer.current = window.setTimeout(() => {
+      edgeAdvanceTimer.current = null
+      pendingEdgeDirection.current = 0
+      step(direction)
+    }, 160)
+  }
+
+  const cancelEdgeAdvance = () => {
+    if (edgeAdvanceTimer.current !== null) window.clearTimeout(edgeAdvanceTimer.current)
+    edgeAdvanceTimer.current = null
+    pendingEdgeDirection.current = 0
+  }
+
+  const handleTouchStart = (event: TouchEvent<HTMLUListElement>) => {
+    touchStartX.current = event.changedTouches[0]?.clientX ?? null
+    cancelEdgeAdvance()
+  }
+
+  const handleTouchEnd = (event: TouchEvent<HTMLUListElement>) => {
+    const start = touchStartX.current
+    touchStartX.current = null
+    const end = event.changedTouches[0]?.clientX
+    if (start === null || end === undefined || Math.abs(end - start) < 44) return
+    step(end < start ? 1 : -1)
+  }
 
   return (
-    <section id="specials" aria-labelledby="specials-title" className="relative overflow-hidden bg-espresso-2 py-24 text-ivory sm:py-32 lg:py-36">
-      <div className="container-x">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <SectionHeading id="specials-title" eyebrow={specials.eyebrow} title={specials.title} italic="at Cafe In." />
-          <p className="max-w-sm text-sm leading-relaxed text-ivory-2">{specials.note}</p>
-        </div>
+    <section id="specials" aria-labelledby="specials-title" className="relative isolate overflow-hidden bg-espresso-2 py-24 text-ivory sm:py-32 lg:py-36">
+      <EmberBackground strength="warm" />
+      <div className="container-x relative z-10">
+        <SectionHeading id="specials-title" eyebrow={specials.eyebrow} title={specials.title} italic="at Cafe In." />
       </div>
 
-      <div role="region" aria-roledescription="carousel" aria-label="Signature specials" className="relative mt-12 sm:mt-16">
+      <div role="region" aria-roledescription="carousel" aria-label="Signature specials" className="relative z-10 mx-auto mt-12 w-full max-w-[1200px] sm:mt-16">
         <ul
-          ref={trackRef}
           tabIndex={0}
-          aria-label="Signature specials — use the left and right arrow keys to browse"
-          data-lenis-prevent-horizontal
-          className="carousel-track no-scrollbar flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain pt-2 pb-8 focus-visible:outline-offset-[-2px] sm:gap-6 lg:gap-8"
+          aria-label="Signature specials — use the left and right arrow keys or swipe to browse"
+          className="specials-track no-scrollbar focus-visible:outline-offset-[-2px]"
+          onPointerEnter={(event) => { edgePointer.current.x = event.clientX - event.currentTarget.getBoundingClientRect().left }}
+          onPointerLeave={() => { cancelEdgeAdvance(); edgePointer.current.x = 0; edgePointer.current.armed = true }}
+          onPointerDown={cancelEdgeAdvance}
+          onPointerMove={handlePointerMove}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
           onKeyDown={(e) => {
             if (e.key === 'ArrowRight') {
               e.preventDefault()
@@ -142,22 +228,33 @@ export function SignatureSpecials({ onSelect }: Props) {
           }}
         >
           {featuredItems.map((item, i) => (
-            <SpecialCard key={item.id} item={item} index={i} total={total} tone={tones[i]} onSelect={onSelect} />
+            <SpecialCard
+              key={item.id}
+              item={item}
+              index={i}
+              total={total}
+              tone={tones[i]}
+              onSelect={onSelect}
+              slot={((i - activeIndex + total + Math.floor(total / 2)) % total) - Math.floor(total / 2)}
+              visible={Math.abs(((i - activeIndex + total + Math.floor(total / 2)) % total) - Math.floor(total / 2)) <= visibleSlots}
+              stepVw={stepVw}
+              reduceMotion={reduceMotion}
+            />
           ))}
         </ul>
 
         <div className="container-x mt-4 flex items-center gap-5 sm:mt-6">
           <p className="label shrink-0 text-ivory-2 tabular-nums" aria-live="polite">
             <span className="sr-only">Showing </span>
-            {range} <span className="text-ivory/45">/ {pad(total)}</span>
+            {pad(activeIndex + 1)} <span className="text-ivory/45">/ {pad(total)}</span>
           </p>
-          {/* Position track: thumb width = share of the row in view */}
+          {/* Position track marks the centred product */}
           <div aria-hidden="true" className="relative h-px flex-1 bg-ivory/15">
             <span
               className="absolute top-1/2 left-0 h-[3px] -translate-y-1/2 rounded-full bg-bronze-deep transition-[transform] duration-300 ease-out"
               style={{
-                width: `${state.visible * 100}%`,
-                transform: `translate(${(state.progress * (1 - state.visible) * 100) / Math.max(state.visible, 0.0001)}%, -50%)`,
+                width: `${100 / total}%`,
+                transform: `translate(${activeIndex * 100}%, -50%)`,
               }}
             />
           </div>
@@ -165,7 +262,6 @@ export function SignatureSpecials({ onSelect }: Props) {
             <button
               type="button"
               onClick={() => step(-1)}
-              disabled={state.atStart}
               aria-label="Previous specials"
               className="glass glass-control text-ivory"
             >
@@ -174,7 +270,6 @@ export function SignatureSpecials({ onSelect }: Props) {
             <button
               type="button"
               onClick={() => step(1)}
-              disabled={state.atEnd}
               aria-label="Next specials"
               className="glass glass-control text-ivory"
             >

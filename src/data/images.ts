@@ -14,17 +14,17 @@ export interface ImageAsset {
 
 export const images = {
   logo: {
-    src: '/images/cafe-in-logo.webp',
+    src: '/images/logo-svg.png',
     alt: 'Cafe In logo — Coffee • Vibes • Memories. Brew it. Love it. Live it!',
-    width: 496,
-    height: 336,
+    width: 1254,
+    height: 1254,
   },
-  /** The original logo centred on its own beige ground (lighting evened out) for round medallions */
+  /** The supplied emblem padded to preserve the existing medallion image aspect ratio */
   logoMedallion: {
-    src: '/images/cafe-in-logo-medallion.webp',
+    src: '/images/logo-svg-medallion.png',
     alt: 'Cafe In logo — Coffee • Vibes • Memories. Brew it. Love it. Live it!',
-    width: 640,
-    height: 640,
+    width: 1254,
+    height: 850,
   },
   lantern: {
     src: '/images/interior-lantern-pendant.webp',

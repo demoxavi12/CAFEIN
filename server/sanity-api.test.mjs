@@ -3,7 +3,9 @@ import assert from 'node:assert/strict'
 import { randomBytes, scrypt as scryptCallback } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { promisify } from 'node:util'
+import adminApi from '../api/admin.mjs'
 import { createSanityApiHandler } from './sanity-api.mjs'
+import { restoreAdminPath } from './vercel-admin-route.mjs'
 
 const scrypt = promisify(scryptCallback)
 async function makePasswordHash(password) {
@@ -26,6 +28,36 @@ test('Vercel routes menu deep links to the SPA and bundles the API seed', () => 
   assert.ok(config.rewrites.some(({ source, destination }) => source === '/menu/:path*' && destination === '/'))
   assert.ok(config.rewrites.some(({ source, destination }) => source === '/digital-menu' && destination === '/'))
   assert.ok(config.rewrites.some(({ source, destination }) => source === '/digital-menu/:path*' && destination === '/'))
+  assert.ok(config.rewrites.some(({ source, destination }) => source === '/api/admin/:route*' && destination === '/api/admin?__cafeInAdminRoute=:route*'))
+  assert.ok(config.rewrites.findIndex(({ source }) => source.startsWith('/api/admin/')) < config.rewrites.findIndex(({ source }) => source === '/menu'))
+  assert.ok(!config.rewrites.some(({ source, destination }) => source.startsWith('/api/') && destination === '/'))
+})
+
+test('admin rewrite restores nested endpoint paths and rejects malformed routes', () => {
+  const sessionRequest = { url: '/api/admin?__cafeInAdminRoute=session' }
+  assert.equal(restoreAdminPath(sessionRequest), true)
+  assert.equal(sessionRequest.url, '/api/admin/session')
+
+  const itemRequest = { url: '/api/admin?__cafeInAdminRoute=menu/espresso&view=edit' }
+  assert.equal(restoreAdminPath(itemRequest), true)
+  assert.equal(itemRequest.url, '/api/admin/menu/espresso?view=edit')
+
+  const traversalRequest = { url: '/api/admin?__cafeInAdminRoute=../menu' }
+  assert.equal(restoreAdminPath(traversalRequest), false)
+  assert.equal(traversalRequest.url, '/api/admin?__cafeInAdminRoute=../menu')
+})
+
+test('Vercel admin function dispatches a rewritten nested session route', async () => {
+  const res = response()
+  const request = {
+    url: '/api/admin?__cafeInAdminRoute=session',
+    method: 'GET',
+    headers: {},
+  }
+  await adminApi(request, res)
+  assert.equal(request.url, '/api/admin/session')
+  assert.equal(res.status, 200)
+  assert.deepEqual(res.body, { authenticated: false })
 })
 
 function fakeClient({ fail = false } = {}) {
@@ -79,6 +111,36 @@ test('draft preview is not exposed through the production API handler', async ()
   const handler = createSanityApiHandler({ env, client: fakeClient(), writeClient: fakeClient(), seed, imageUrlBuilder })
   const result = await call(handler, '/api/preview/sanity-drafts')
   assert.equal(result.status, 404)
+})
+
+test('public menu never returns Sanity draft metadata and known API paths enforce methods', async () => {
+  const handler = createSanityApiHandler({ env, client: fakeClient(), writeClient: fakeClient(), seed, imageUrlBuilder })
+  const menu = await call(handler, '/api/menu')
+  assert.equal(menu.status, 200)
+  assert.doesNotMatch(JSON.stringify(menu.body), /drafts\.|_originalId|_originalRev|"_id"/)
+
+  const session = await call(handler, '/api/admin/session')
+  assert.equal(session.status, 200)
+  assert.equal(session.body.authenticated, false)
+
+  const adminMenu = await call(handler, '/api/admin/menu')
+  assert.equal(adminMenu.status, 401)
+  assert.equal(adminMenu.headers['Content-Type'], 'application/json; charset=utf-8')
+
+  const wrongMethod = await call(handler, '/api/admin/login', { method: 'GET' })
+  assert.equal(wrongMethod.status, 405)
+  assert.equal(wrongMethod.headers.Allow, 'POST')
+
+  const originCheck = await call(handler, '/api/admin/login', { method: 'POST' })
+  assert.equal(originCheck.status, 403)
+})
+
+test('unknown API routes return sanitized JSON 404 responses', async () => {
+  const handler = createSanityApiHandler({ env, client: fakeClient(), writeClient: fakeClient(), seed, imageUrlBuilder })
+  const result = await call(handler, '/api/not-a-real-route')
+  assert.equal(result.status, 404)
+  assert.equal(result.body.code, 'not_found')
+  assert.equal(result.headers['Content-Type'], 'application/json; charset=utf-8')
 })
 
 test('manager authentication fails closed without configured Sanity writes', async () => {

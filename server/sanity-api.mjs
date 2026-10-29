@@ -266,6 +266,24 @@ export function createSanityApiHandler({ env = process.env, client = createReadC
     const method = req.method || 'GET'
     if (!path.startsWith('/api/')) return false
     try {
+      const methodRules = new Map([
+        ['/api/menu', ['GET']],
+        ['/api/admin/session', ['GET']],
+        ['/api/admin/login', ['POST']],
+        ['/api/admin/logout', ['POST']],
+        ['/api/admin/menu', ['GET', 'POST']],
+        ['/api/admin/export', ['GET']],
+        ['/api/admin/images', ['POST', 'DELETE']],
+        ['/api/admin/import/preview', ['POST']],
+        ['/api/admin/import/apply', ['POST']],
+        ['/api/admin/publish', ['POST']],
+      ])
+      const itemRoute = /^\/api\/admin\/menu\/[^/]+$/.test(path)
+      const allowedMethods = methodRules.get(path) || (itemRoute ? ['PUT', 'DELETE'] : null)
+      if (allowedMethods && !allowedMethods.includes(method)) {
+        send(res, 405, { error: 'This HTTP method is not allowed for the endpoint.', code: 'method_not_allowed' }, { Allow: allowedMethods.join(', ') })
+        return true
+      }
       if (path === '/api/preview/sanity-drafts') throw new MenuStoreError('Not found.', 404, 'not_found')
       if (path === '/api/menu' && method === 'GET') {
         try {

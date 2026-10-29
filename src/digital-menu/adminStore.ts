@@ -1,177 +1,251 @@
-import { useEffect, useState } from 'react'
-import { menuItems, type MenuItem } from '../data/menu'
-
-export interface MenuOverrides {
-  prices: Record<string, number>
-  soldOut: Record<string, boolean>
-  badges: Record<string, string> // 'bestseller' | 'chef-special' | 'new' | ''
-  descriptions: Record<string, string>
-}
-
-const STORAGE_KEY = 'cafein_digital_menu_overrides_v1'
-const PIN_KEY = 'cafein_admin_pin_v1'
-const DEFAULT_PIN = '1234'
-
-function loadOverrides(): MenuOverrides {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
-      return JSON.parse(raw)
-    }
-  } catch (e) {
-    console.error('Failed to load menu overrides', e)
-  }
-  return { prices: {}, soldOut: {}, badges: {}, descriptions: {} }
-}
-
-function saveOverrides(overrides: MenuOverrides) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(overrides))
-    window.dispatchEvent(new CustomEvent('cafein_menu_updated', { detail: overrides }))
-  } catch (e) {
-    console.error('Failed to save menu overrides', e)
-  }
-}
-
-export function getAdminPin(): string {
-  try {
-    return localStorage.getItem(PIN_KEY) || DEFAULT_PIN
-  } catch {
-    return DEFAULT_PIN
-  }
-}
-
-export function setAdminPin(pin: string) {
-  try {
-    localStorage.setItem(PIN_KEY, pin)
-  } catch (e) {
-    console.error('Failed to set admin pin', e)
-  }
-}
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { ImageAsset } from '../data/images'
+import type { MenuCategory, MenuItem } from '../data/menu'
 
 export interface EnhancedMenuItem extends MenuItem {
   isSoldOut: boolean
   badge?: string
 }
 
-export function getProcessedMenuItems(overrides: MenuOverrides): EnhancedMenuItem[] {
-  // Pre-seed some natural bestsellers if not overridden
-  const defaultBestsellers = new Set([
-    'cappuccino',
-    'biscoff-latte',
-    'vietnamese-iced-coffee',
-    'loaded-french-fries',
-    'alfredo-penne',
-    'biscoff-cheesecake',
-    'hot-chocolate',
-  ])
+export interface MenuSnapshot {
+  schemaVersion: 1
+  revision: number
+  categories: MenuCategory[]
+  items: EnhancedMenuItem[]
+}
 
-  return menuItems.map((item) => {
-    const customPrice = overrides.prices[item.id]
-    const customSoldOut = overrides.soldOut[item.id] ?? false
-    const customBadge = overrides.badges[item.id] !== undefined 
-      ? overrides.badges[item.id] 
-      : defaultBestsellers.has(item.id) 
-        ? 'Bestseller' 
-        : undefined
-    const customDesc = overrides.descriptions[item.id] ?? item.description
+export interface MenuBackup extends Omit<MenuSnapshot, 'schemaVersion'> {
+  schemaVersion: 1
+}
 
-    return {
-      ...item,
-      price: customPrice ?? item.price,
-      description: customDesc,
-      isSoldOut: customSoldOut,
-      badge: customBadge || undefined,
-    }
+export interface ImportPreview {
+  baseRevision: number
+  added: string[]
+  updated: string[]
+  removed: string[]
+  itemCount: number
+}
+
+const MENU_UPDATED_EVENT = 'cafein_menu_updated'
+let csrfToken: string | null = null
+
+async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(url, { credentials: 'same-origin', ...init })
+  const data = await response.json().catch(() => ({})) as T & { error?: string }
+  if (!response.ok) throw new Error(data.error || 'The request could not be completed.')
+  return data
+}
+
+async function getCsrfToken() {
+  if (csrfToken) return csrfToken
+  const session = await requestJson<{ authenticated: boolean; csrfToken?: string }>('/api/admin/session')
+  if (!session.authenticated || !session.csrfToken) throw new Error('Your manager session has expired. Sign in again.')
+  csrfToken = session.csrfToken
+  return csrfToken
+}
+
+async function adminRequest<T>(url: string, init: RequestInit = {}) {
+  const token = await getCsrfToken()
+  return requestJson<T>(url, {
+    ...init,
+    headers: {
+      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(init.headers || {}),
+      'X-CSRF-Token': token,
+    },
   })
 }
 
-/** Hook providing live reactive menu items reflecting admin edits */
-export function useLiveMenu() {
-  const [overrides, setOverrides] = useState<MenuOverrides>(loadOverrides)
+export async function uploadMenuPhoto(file: File, onProgress: (progress: number) => void): Promise<ImageAsset> {
+  const token = await getCsrfToken()
+  const contentType = file.type || (/\.png$/i.test(file.name) ? 'image/png' : /\.jpe?g$/i.test(file.name) ? 'image/jpeg' : '')
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest()
+    request.open('POST', '/api/admin/images')
+    request.withCredentials = true
+    request.setRequestHeader('X-CSRF-Token', token)
+    request.setRequestHeader('Content-Type', contentType)
+    request.upload.addEventListener('progress', (event) => {
+      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100))
+    })
+    request.addEventListener('load', () => {
+      let result: { image?: ImageAsset; error?: string } = {}
+      try { result = JSON.parse(request.responseText || '{}') as typeof result } catch { /* Use the request status message below. */ }
+      if (request.status < 200 || request.status >= 300 || !result.image) {
+        reject(new Error(result.error || 'The photo upload could not be completed.'))
+        return
+      }
+      onProgress(100)
+      resolve(result.image)
+    })
+    request.addEventListener('error', () => reject(new Error('The photo upload was interrupted. Check your connection and try again.')))
+    request.addEventListener('abort', () => reject(new Error('The photo upload was cancelled.')))
+    request.send(file)
+  })
+}
 
-  useEffect(() => {
-    const handleUpdate = () => {
-      setOverrides(loadOverrides())
+export async function discardMenuPhoto(src: string) {
+  return adminRequest<{ deleted: boolean }>('/api/admin/images', {
+    method: 'DELETE',
+    body: JSON.stringify({ src }),
+  })
+}
+
+function announceMenuChange(snapshot: MenuSnapshot) {
+  window.dispatchEvent(new CustomEvent<MenuSnapshot>(MENU_UPDATED_EVENT, { detail: snapshot }))
+}
+
+export async function loginAdmin(password: string) {
+  const result = await requestJson<{ authenticated: boolean; csrfToken: string }>('/api/admin/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  })
+  csrfToken = result.csrfToken
+  const snapshot = await requestJson<MenuSnapshot>('/api/admin/menu')
+  announceMenuChange(snapshot)
+  return snapshot
+}
+
+export async function logoutAdmin() {
+  await adminRequest('/api/admin/logout', { method: 'POST' })
+  csrfToken = null
+}
+
+export async function checkAdminSession() {
+  const session = await requestJson<{ authenticated: boolean; csrfToken?: string }>('/api/admin/session')
+  csrfToken = session.authenticated ? session.csrfToken || null : null
+  if (!session.authenticated) return null
+  const snapshot = await requestJson<MenuSnapshot>('/api/admin/menu')
+  announceMenuChange(snapshot)
+  return snapshot
+}
+
+export function useLiveMenu(options: { forceLegacy?: boolean } = {}) {
+  const [items, setItems] = useState<EnhancedMenuItem[]>([])
+  const [categories, setCategories] = useState<MenuCategory[]>([])
+  const [revision, setRevision] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [dataSource, setDataSource] = useState<'sanity' | 'legacy'>('legacy')
+  const dataSourceRef = useRef<'sanity' | 'legacy'>('legacy')
+  const revisionRef = useRef(0)
+  const hasSnapshotRef = useRef(false)
+  const refreshSequenceRef = useRef(0)
+
+  const acceptSnapshot = useCallback((snapshot: MenuSnapshot, source: 'sanity' | 'legacy' = 'legacy') => {
+    dataSourceRef.current = source
+    setDataSource(source)
+    if (hasSnapshotRef.current && revisionRef.current === snapshot.revision) {
+      setError('')
+      setLoading(false)
+      return
     }
-    window.addEventListener('cafein_menu_updated', handleUpdate)
-    window.addEventListener('storage', handleUpdate)
-    return () => {
-      window.removeEventListener('cafein_menu_updated', handleUpdate)
-      window.removeEventListener('storage', handleUpdate)
-    }
+    setItems(snapshot.items)
+    setCategories(snapshot.categories)
+    setRevision(snapshot.revision)
+    revisionRef.current = snapshot.revision
+    hasSnapshotRef.current = true
+    setError('')
+    setLoading(false)
   }, [])
 
-  const updatePrice = (id: string, price: number) => {
-    const updated = {
-      ...overrides,
-      prices: { ...overrides.prices, [id]: price },
-    }
-    setOverrides(updated)
-    saveOverrides(updated)
-  }
-
-  const toggleSoldOut = (id: string) => {
-    const current = overrides.soldOut[id] ?? false
-    const updated = {
-      ...overrides,
-      soldOut: { ...overrides.soldOut, [id]: !current },
-    }
-    setOverrides(updated)
-    saveOverrides(updated)
-  }
-
-  const updateBadge = (id: string, badge: string) => {
-    const updated = {
-      ...overrides,
-      badges: { ...overrides.badges, [id]: badge },
-    }
-    setOverrides(updated)
-    saveOverrides(updated)
-  }
-
-  const updateDescription = (id: string, description: string) => {
-    const updated = {
-      ...overrides,
-      descriptions: { ...overrides.descriptions, [id]: description },
-    }
-    setOverrides(updated)
-    saveOverrides(updated)
-  }
-
-  const resetToDefault = () => {
-    const empty: MenuOverrides = { prices: {}, soldOut: {}, badges: {}, descriptions: {} }
-    setOverrides(empty)
-    saveOverrides(empty)
-  }
-
-  const exportConfig = () => JSON.stringify(overrides, null, 2)
-
-  const importConfig = (json: string): boolean => {
+  const refresh = useCallback(async (): Promise<MenuSnapshot | null> => {
+    const requestSequence = ++refreshSequenceRef.current
     try {
-      const parsed = JSON.parse(json)
-      if (typeof parsed === 'object' && parsed !== null) {
-        setOverrides(parsed)
-        saveOverrides(parsed)
-        return true
+      if (!options.forceLegacy) {
+        const { fetchPublishedMenu } = await import('./sanityContent')
+        const published = await fetchPublishedMenu()
+        if (requestSequence !== refreshSequenceRef.current) return null
+        if (published) {
+          acceptSnapshot(published, 'sanity')
+          return published
+        }
       }
-    } catch (e) {
-      console.error('Failed to import config JSON', e)
+    } catch {
+      // Keep the existing published-site fallback available while Sanity is empty or unavailable.
     }
-    return false
-  }
+    try {
+      const snapshot = await requestJson<Omit<MenuSnapshot, 'schemaVersion'>>('/api/menu')
+      const current = { schemaVersion: 1 as const, ...snapshot }
+      if (requestSequence !== refreshSequenceRef.current) return null
+      acceptSnapshot(current)
+      return current
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The menu could not be loaded.')
+      setLoading(false)
+      return null
+    }
+  }, [acceptSnapshot, options.forceLegacy])
 
-  const items = getProcessedMenuItems(overrides)
+  useEffect(() => {
+    const refreshTimer = window.setTimeout(() => { void refresh() }, 0)
+    const pollTimer = window.setInterval(() => { void refresh() }, 30_000)
+    const handleMenuChange = (event: Event) => {
+      if (!options.forceLegacy && dataSourceRef.current === 'sanity') return
+      const detail = (event as CustomEvent<MenuSnapshot>).detail
+      if (detail) acceptSnapshot(detail)
+      else void refresh()
+    }
+    const handleFocus = () => { if (document.visibilityState === 'visible') void refresh() }
+    window.addEventListener(MENU_UPDATED_EVENT, handleMenuChange)
+    window.addEventListener('focus', handleFocus)
+    document.addEventListener('visibilitychange', handleFocus)
+    return () => {
+      window.clearTimeout(refreshTimer)
+      window.clearInterval(pollTimer)
+      window.removeEventListener(MENU_UPDATED_EVENT, handleMenuChange)
+      window.removeEventListener('focus', handleFocus)
+      document.removeEventListener('visibilitychange', handleFocus)
+    }
+  }, [acceptSnapshot, options.forceLegacy, refresh])
 
-  return {
-    items,
-    overrides,
-    updatePrice,
-    toggleSoldOut,
-    updateBadge,
-    updateDescription,
-    resetToDefault,
-    exportConfig,
-    importConfig,
-  }
+  const saveSnapshot = useCallback((snapshot: MenuSnapshot) => {
+    acceptSnapshot(snapshot)
+    announceMenuChange(snapshot)
+  }, [acceptSnapshot])
+
+  const saveItem = useCallback(async (item: EnhancedMenuItem) => {
+    const isNew = !items.some((existing) => existing.id === item.id)
+    const result = await adminRequest<{ revision: number }>('/api/admin/menu' + (isNew ? '' : `/${encodeURIComponent(item.id)}`), {
+      method: isNew ? 'POST' : 'PUT',
+      headers: { 'If-Match': `"${revisionRef.current}"` },
+      body: JSON.stringify(item),
+    })
+    const snapshot = await requestJson<MenuSnapshot>('/api/admin/menu')
+    if (snapshot.revision !== result.revision) throw new Error('The menu changed while your save was completing. Reload before continuing.')
+    saveSnapshot(snapshot)
+    return snapshot.items.find((entry) => entry.id === item.id)!
+  }, [items, saveSnapshot])
+
+  const deleteItem = useCallback(async (id: string) => {
+    const result = await adminRequest<{ revision: number }>(`/api/admin/menu/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: { 'If-Match': `"${revisionRef.current}"` },
+    })
+    const snapshot = await requestJson<MenuSnapshot>('/api/admin/menu')
+    if (snapshot.revision !== result.revision) throw new Error('The menu changed while your save was completing. Reload before continuing.')
+    saveSnapshot(snapshot)
+  }, [saveSnapshot])
+
+  const exportMenu = useCallback(async () => adminRequest<MenuBackup>('/api/admin/export'), [])
+
+  const previewImport = useCallback(async (backup: MenuBackup) => adminRequest<ImportPreview>('/api/admin/import/preview', {
+    method: 'POST',
+    body: JSON.stringify(backup),
+  }), [])
+
+  const applyImport = useCallback(async (backup: MenuBackup, expectedRevision: number) => {
+    const result = await adminRequest<{ revision: number }>('/api/admin/import/apply', {
+      method: 'POST',
+      headers: { 'If-Match': `"${expectedRevision}"` },
+      body: JSON.stringify({ backup, confirmReplace: true }),
+    })
+    const snapshot = await requestJson<MenuSnapshot>('/api/admin/menu')
+    if (snapshot.revision !== result.revision) throw new Error('The menu changed while your import was completing. Reload before continuing.')
+    saveSnapshot(snapshot)
+    return snapshot
+  }, [saveSnapshot])
+
+  return { items, categories, revision, loading, error, dataSource, refresh, saveItem, deleteItem, exportMenu, previewImport, applyImport }
 }

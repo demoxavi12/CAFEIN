@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react'
+import { useState } from 'react'
 import {
   X,
   Plus,
@@ -111,6 +112,7 @@ export function DigitalMenuDetailSheet({
   onAdd,
   onRemove,
 }: Props) {
+  const [failedImageSrc, setFailedImageSrc] = useState<string | null>(null)
   if (!item) return null
 
   const motif = getDetailMotif(item.category, item.section, item.name)
@@ -183,11 +185,16 @@ export function DigitalMenuDetailSheet({
 
             {/* Visual Display: Real Photo OR Luxury Culinary Presentation */}
             <div className="mt-4 overflow-hidden rounded-2xl border border-ivory/12 bg-black/40 shadow-xl">
-              {item.image ? (
+              {item.image && failedImageSrc !== item.image.src ? (
                 <div className="relative max-h-60 sm:max-h-64 w-full overflow-hidden">
                   <img
                     src={item.image.src}
                     alt={item.name}
+                    width={item.image.width}
+                    height={item.image.height}
+                    loading="lazy"
+                    decoding="async"
+                    onError={() => setFailedImageSrc(item.image!.src)}
                     style={{
                       objectPosition: item.image.focus || '50% 50%',
                     }}

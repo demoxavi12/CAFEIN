@@ -1,6 +1,7 @@
 import { motion } from 'motion/react'
-import { featuredItems, specials } from '../data/specials'
+import { specials, temporaryItems } from '../data/specials'
 import { formatPrice, type MenuItem } from '../data/menu'
+import { useLiveMenu } from '../digital-menu/adminStore'
 import { SectionHeading } from '../components/SectionHeading'
 import { RevealImage } from '../components/RevealImage'
 import { ConfirmFlag } from '../components/ConfirmFlag'
@@ -8,6 +9,7 @@ import { useMediaQuery } from '../hooks/useMediaQuery'
 import { EmberBackground } from '../components/EmberBackground'
 import { EASE_OUT } from '../lib/motion'
 import { useEffect, useRef, useState, type PointerEvent, type TouchEvent } from 'react'
+import type { PublishedSpecials } from '../digital-menu/sanityContent'
 
 interface Props {
   onSelect: (item: MenuItem) => void
@@ -17,23 +19,25 @@ interface Props {
 const panelTones = ['bg-mocha', 'bg-espresso-2']
 const pad = (n: number) => String(n).padStart(2, '0')
 
-function SpecialCard({ item, index, total, tone, onSelect, slot, visible, stepVw, reduceMotion }: { item: MenuItem; index: number; total: number; tone: string; onSelect: (item: MenuItem) => void; slot: number; visible: boolean; stepVw: number; reduceMotion: boolean }) {
+function SpecialCard({ item, index, total, tone, onSelect, slot, visible, stepVw, neighborScale, compact, reduceMotion }: { item: MenuItem; index: number; total: number; tone: string; onSelect: (item: MenuItem) => void; slot: number; visible: boolean; stepVw: number; neighborScale: number; compact: boolean; reduceMotion: boolean }) {
   const label = `${item.name}, ${formatPrice(item.price)}${item.needsConfirmation ? ' (details to be confirmed)' : ''} — view details`
+  const interactive = visible && (!compact || slot === 0)
   return (
     <motion.li
       aria-roledescription="slide"
       aria-label={`${index + 1} of ${total}: ${item.name}`}
-      aria-hidden={!visible}
-      inert={!visible}
+      aria-hidden={!interactive}
+      inert={!interactive}
       data-slot={slot}
       className="specials-card"
+      style={{ pointerEvents: interactive ? 'auto' : 'none' }}
       initial={false}
       animate={{
         x: `${slot * stepVw}vw`,
-        scale: slot === 0 ? 1 : Math.abs(slot) === 1 ? 0.84 : 0.7,
-        rotate: slot === 0 ? 0 : slot * -3,
-        y: slot === 0 ? 0 : Math.abs(slot) === 1 ? 12 : 25,
-        opacity: visible ? 1 : 0,
+        scale: slot === 0 ? 1 : Math.abs(slot) === 1 ? neighborScale : 0.7,
+        rotate: compact ? 0 : slot === 0 ? 0 : slot * -3,
+        y: compact ? (slot === 0 ? 0 : 4) : slot === 0 ? 0 : Math.abs(slot) === 1 ? 12 : 25,
+        opacity: visible ? (compact && slot !== 0 ? 0.78 : 1) : 0,
         zIndex: 5 - Math.abs(slot),
       }}
       transition={{ duration: reduceMotion ? 0 : 0.65, ease: EASE_OUT }}
@@ -45,25 +49,25 @@ function SpecialCard({ item, index, total, tone, onSelect, slot, visible, stepVw
         viewport={{ once: true, margin: '0px 0px -8% 0px' }}
         transition={{ duration: 0.9, ease: EASE_OUT, delay: Math.min(index, 3) * 0.08 }}
       >
-        <div className="relative overflow-hidden rounded-sm shadow-[0_26px_52px_-32px_rgba(0,0,0,0.72)] transition-[transform,box-shadow] duration-700 ease-[var(--ease-out-soft)] group-hover:-translate-y-1 group-hover:shadow-[0_34px_64px_-32px_rgba(0,0,0,0.78)]">
+        <div className="relative overflow-hidden rounded-sm shadow-[0_26px_52px_-32px_rgba(0,0,0,0.72)] transition-[transform,box-shadow] duration-700 ease-[var(--ease-out-soft)] group-hover:-translate-y-1 group-hover:shadow-[0_34px_64px_-32px_rgba(0,0,0,0.78)] lg:h-[min(425px,calc(100svh-363px))]">
           {item.image ? (
             <RevealImage
               image={item.image}
-              className="aspect-[4/5]"
+              className="aspect-[4/5] lg:aspect-auto lg:h-full"
               imgClassName="transition-transform duration-[1.4s] ease-[var(--ease-out-soft)] group-hover:scale-[1.05]"
             />
           ) : (
-            <div className={`relative flex aspect-[4/5] flex-col justify-end overflow-hidden p-7 text-ivory sm:p-8 ${tone}`}>
+            <div className={`specials-card-placeholder relative flex aspect-[4/5] flex-col justify-end overflow-hidden p-7 text-ivory sm:p-8 lg:aspect-auto lg:h-full ${tone}`}>
               <div
                 aria-hidden="true"
-                className="absolute -top-16 -right-16 h-64 w-64 rounded-full border border-bronze/30 transition-transform duration-[1.4s] ease-[var(--ease-out-soft)] group-hover:scale-110"
+                className="specials-card-placeholder-ring absolute -top-16 -right-16 h-64 w-64 rounded-full border border-bronze/30 transition-transform duration-[1.4s] ease-[var(--ease-out-soft)] group-hover:scale-110"
               />
               <div
                 aria-hidden="true"
-                className="absolute -top-2 -right-2 h-40 w-40 rounded-full border border-bronze/20 transition-transform duration-[1.4s] ease-[var(--ease-out-soft)] group-hover:scale-125"
+                className="specials-card-placeholder-ring absolute -top-2 -right-2 h-40 w-40 rounded-full border border-bronze/20 transition-transform duration-[1.4s] ease-[var(--ease-out-soft)] group-hover:scale-125"
               />
               <p className="label mb-3 text-bronze-light">From the menu</p>
-              <p aria-hidden="true" className="display relative text-[clamp(2.4rem,4vw,3.4rem)] text-ivory italic">
+              <p aria-hidden="true" className="specials-card-placeholder-title display relative text-[clamp(2.4rem,4vw,3.4rem)] text-ivory italic">
                 {item.section}
               </p>
             </div>
@@ -71,7 +75,7 @@ function SpecialCard({ item, index, total, tone, onSelect, slot, visible, stepVw
           <span className="glass label pointer-events-none absolute top-4 left-4 rounded-full px-3 py-1.5 text-ivory">{pad(index + 1)}</span>
         </div>
 
-        <div className="flex flex-1 flex-col px-1 pt-6">
+        <div className="specials-card-content flex flex-1 flex-col px-1 pt-6 lg:pt-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <p className="label text-bronze">{item.section}</p>
@@ -89,10 +93,10 @@ function SpecialCard({ item, index, total, tone, onSelect, slot, visible, stepVw
             <span className="display shrink-0 pt-5 text-[1.7rem] text-ivory-2">{formatPrice(item.price)}</span>
           </div>
           {/* Two-line slot keeps every card the same height */}
-          <p aria-hidden={!item.description} className={`mt-3 line-clamp-2 min-h-[3.25em] text-sm leading-relaxed ${item.description ? 'text-ivory-2' : 'text-transparent'}`}>
+          <p aria-hidden={!item.description} className={`mt-3 lg:mt-2 line-clamp-2 min-h-[3.25em] text-sm leading-relaxed ${item.description ? 'text-ivory-2' : 'text-transparent'}`}>
             {item.description ?? '\u00a0'}
           </p>
-          <div className="mt-5 flex items-center justify-between gap-3 border-t border-ivory/15 pt-4">
+          <div className="mt-5 lg:mt-2 flex items-center justify-between gap-3 border-t border-ivory/15 pt-4 lg:pt-2">
             {item.needsConfirmation ? <ConfirmFlag note={item.needsConfirmation} tone="light" /> : <span />}
             <span className="label inline-flex items-center gap-2 text-ivory/70 transition-colors group-hover:text-ivory">
               View details
@@ -123,6 +127,27 @@ function Arrow({ dir }: { dir: 'prev' | 'next' }) {
 }
 
 export function SignatureSpecials({ onSelect }: Props) {
+  const { items: liveMenuItems } = useLiveMenu()
+  const [publishedSpecials, setPublishedSpecials] = useState<PublishedSpecials | null>(null)
+  useEffect(() => {
+    let active = true
+    const refresh = () => {
+      void import('../digital-menu/sanityContent').then(({ fetchPublishedSpecials }) => fetchPublishedSpecials()).then((result) => {
+        if (active && result) setPublishedSpecials((current) => JSON.stringify(current) === JSON.stringify(result) ? current : result)
+      }).catch(() => {
+        // Continue to use the existing menu-backed special selection if published specials are unavailable.
+      })
+    }
+    refresh()
+    const timer = window.setInterval(refresh, 30_000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [])
+  const featuredItems = [
+    ...(publishedSpecials?.items ?? [
+      ...specials.ids.map((id) => liveMenuItems.find((item) => item.id === id)).filter((item): item is NonNullable<typeof item> => Boolean(item)),
+      ...temporaryItems,
+    ]),
+  ]
   const total = featuredItems.length
   const [activeIndex, setActiveIndex] = useState(0)
   const step = (direction: 1 | -1) => setActiveIndex((current) => (current + direction + total) % total)
@@ -137,7 +162,7 @@ export function SignatureSpecials({ onSelect }: Props) {
   let typographic = 0
   const tones = featuredItems.map((item) => (item.image ? '' : panelTones[typographic++ % panelTones.length]))
   const visibleSlots = compact || tablet ? 1 : 2
-  const stepVw = compact ? 39 : tablet ? 31 : 21
+  const stepVw = compact ? 43 : tablet ? 31 : 21
   const canScroll = total > 1
 
   useEffect(() => () => {
@@ -200,13 +225,13 @@ export function SignatureSpecials({ onSelect }: Props) {
   }
 
   return (
-    <section id="specials" aria-labelledby="specials-title" className="relative isolate overflow-hidden bg-espresso-2 py-24 text-ivory sm:py-32 lg:py-36">
+    <section id="specials" aria-labelledby="specials-title" className="relative isolate overflow-hidden bg-espresso-2 py-24 text-ivory sm:py-32 lg:py-24">
       <EmberBackground strength="warm" />
       <div className="container-x relative z-10">
-        <SectionHeading id="specials-title" eyebrow={specials.eyebrow} title={specials.title} italic="at Cafe In." />
+        <SectionHeading id="specials-title" eyebrow={publishedSpecials?.eyebrow ?? specials.eyebrow} title={publishedSpecials?.title ?? specials.title} italic="at Cafe In." />
       </div>
 
-      <div role="region" aria-roledescription="carousel" aria-label="Signature specials" className="relative z-10 mx-auto mt-12 w-full max-w-[1200px] sm:mt-16">
+      <div role="region" aria-roledescription="carousel" aria-label="Signature specials" className="relative z-10 mx-auto mt-12 w-full max-w-[1200px] sm:mt-16 lg:mt-12">
         <ul
           tabIndex={0}
           aria-label="Signature specials — use the left and right arrow keys or swipe to browse"
@@ -238,12 +263,33 @@ export function SignatureSpecials({ onSelect }: Props) {
               slot={((i - activeIndex + total + Math.floor(total / 2)) % total) - Math.floor(total / 2)}
               visible={Math.abs(((i - activeIndex + total + Math.floor(total / 2)) % total) - Math.floor(total / 2)) <= visibleSlots}
               stepVw={stepVw}
+              neighborScale={compact ? 0.96 : 0.84}
+              compact={compact}
               reduceMotion={reduceMotion}
             />
           ))}
         </ul>
 
-        <div className="container-x mt-4 flex items-center gap-5 sm:mt-6">
+        <div className={`mt-4 flex justify-center gap-3 sm:mt-6 lg:mt-2 ${canScroll ? '' : 'invisible'}`}>
+          <button
+            type="button"
+            onClick={() => step(-1)}
+            aria-label="Previous specials"
+            className="glass glass-control text-ivory"
+          >
+            <Arrow dir="prev" />
+          </button>
+          <button
+            type="button"
+            onClick={() => step(1)}
+            aria-label="Next specials"
+            className="glass glass-control text-ivory"
+          >
+            <Arrow dir="next" />
+          </button>
+        </div>
+
+        <div className="container-x mt-4 flex items-center gap-5 sm:mt-6 lg:mt-3">
           <p className="label shrink-0 text-ivory-2 tabular-nums" aria-live="polite">
             <span className="sr-only">Showing </span>
             {pad(activeIndex + 1)} <span className="text-ivory/45">/ {pad(total)}</span>
@@ -257,24 +303,6 @@ export function SignatureSpecials({ onSelect }: Props) {
                 transform: `translate(${activeIndex * 100}%, -50%)`,
               }}
             />
-          </div>
-          <div className={`flex shrink-0 gap-3 ${canScroll ? '' : 'invisible'}`}>
-            <button
-              type="button"
-              onClick={() => step(-1)}
-              aria-label="Previous specials"
-              className="glass glass-control text-ivory"
-            >
-              <Arrow dir="prev" />
-            </button>
-            <button
-              type="button"
-              onClick={() => step(1)}
-              aria-label="Next specials"
-              className="glass glass-control text-ivory"
-            >
-              <Arrow dir="next" />
-            </button>
           </div>
         </div>
       </div>

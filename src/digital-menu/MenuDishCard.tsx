@@ -22,6 +22,7 @@ interface Props {
   onAdd: (id: string) => void
   onRemove: (id: string) => void
   compact?: boolean
+  showTrayActions?: boolean
 }
 
 /**
@@ -113,10 +114,14 @@ export function MenuDishCard({
   onAdd,
   onRemove,
   compact = false,
+  showTrayActions = true,
 }: Props) {
-  const [imgLoaded, setImgLoaded] = useState(false)
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null)
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
   const motif = getCategoryMotif(item.category, item.section, item.name)
   const MotifIcon = motif.icon
+  const imgLoaded = Boolean(item.image && loadedSrc === item.image.src)
+  const imageFailed = Boolean(item.image && failedSrc === item.image.src)
 
   return (
     <motion.div
@@ -128,9 +133,16 @@ export function MenuDishCard({
       {/* Clickable Card Body */}
       <div
         onClick={() => onSelect(item)}
-        className="cursor-pointer select-none"
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            onSelect(item)
+          }
+        }}
+        className="cursor-pointer select-none text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bronze"
         role="button"
         tabIndex={0}
+        aria-label={`View ${item.name} details`}
       >
         {/* Top Badges: Veg dot, Badge (Bestseller), Price */}
         <div className="flex items-start justify-between gap-2">
@@ -163,7 +175,7 @@ export function MenuDishCard({
 
         {/* Dish Visual Area: Real photo OR Luxury Culinary Skeleton */}
         <div className="relative mt-3.5 h-36 sm:h-40 w-full overflow-hidden rounded-xl border border-ivory/10 shadow-inner bg-black/40">
-          {item.image ? (
+          {item.image && !imageFailed ? (
             <>
               {/* Shimmer skeleton while image loads */}
               {!imgLoaded && (
@@ -182,7 +194,11 @@ export function MenuDishCard({
                 src={item.image.src}
                 alt={item.name}
                 loading="lazy"
-                onLoad={() => setImgLoaded(true)}
+                decoding="async"
+                width={item.image.width}
+                height={item.image.height}
+                onLoad={() => setLoadedSrc(item.image!.src)}
+                onError={() => setFailedSrc(item.image!.src)}
                 style={{
                   objectPosition: item.image.focus || '50% 50%',
                 }}
@@ -270,7 +286,7 @@ export function MenuDishCard({
         </button>
 
         {/* Add to Tray Controls */}
-        {item.isSoldOut ? (
+        {!showTrayActions ? null : item.isSoldOut ? (
           <span className="text-xs italic text-ivory/40">Unavailable</span>
         ) : quantityInTray > 0 ? (
           <div className="flex items-center gap-2 rounded-full bg-bronze/20 border border-bronze/40 p-1 shadow-inner">

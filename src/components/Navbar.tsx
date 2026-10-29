@@ -1,4 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { Coffee } from 'lucide-react'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { navLinks } from '../data/nav'
 import { business } from '../data/business'
@@ -68,14 +69,12 @@ export function Navbar() {
   return (
     <header
       onKeyDown={(e) => open && trapTab(mobileMenuRef.current, e)}
-      className="fixed inset-x-0 top-0 z-50"
+      className={`fixed inset-x-0 top-0 z-50 transition-[padding] duration-500 ease-[var(--ease-out-soft)] ${scrolled && !open ? 'pt-2' : 'pt-4 lg:pt-14'}`}
     >
-      <div className="container-x">
+      <div className="mx-auto w-full max-w-[1440px] px-[var(--gutter)]">
       <nav
         aria-label="Primary"
-        className={`flex h-16 items-center justify-between rounded-full transition-[background-color,border-color,box-shadow,margin,padding] duration-500 ease-[var(--ease-out-soft)] ${
-          scrolled && !open ? 'glass glass-nav mt-2 -mx-2 pr-2 pl-4 sm:-mx-3 sm:pl-5 lg:mt-3' : 'glass glass-nav mt-1 border border-ivory/10 pr-2 pl-4 sm:pl-5 lg:mt-2 lg:h-[72px]'
-        }`}
+        className="glass glass-nav flex h-16 items-center justify-between rounded-full border border-[#b18a55]/25 bg-[rgba(33,26,21,0.72)] pr-2 pl-4 shadow-[0_14px_42px_-28px_rgba(0,0,0,0.9)] sm:pl-5 lg:h-[68px]"
       >
         <a href="#top" onClick={go('top')} className="relative z-10 text-lg text-ivory sm:text-xl">
           <Wordmark />
@@ -88,7 +87,7 @@ export function Navbar() {
                 href={`#${l.id}`}
                 onClick={go(l.id)}
                 aria-current={active === l.id ? 'true' : undefined}
-                className={`link-underline label py-1 transition-colors ${active === l.id ? 'text-ivory' : 'text-ivory/75 hover:text-ivory'}`}
+                className={`link-underline py-2 text-xs font-semibold tracking-[0.12em] uppercase transition-colors ${active === l.id ? 'text-ivory' : 'text-ivory/75 hover:text-ivory'}`}
               >
                 {l.label}
               </a>
@@ -103,14 +102,12 @@ export function Navbar() {
               window.history.pushState({}, '', '?view=menu')
               window.dispatchEvent(new Event('popstate'))
             }}
-            className={`hidden sm:inline-flex items-center gap-1.5 rounded-full border border-bronze/40 bg-bronze/10 px-3.5 py-2 text-xs font-semibold tracking-wider text-bronze uppercase hover:bg-bronze hover:text-espresso transition-all ${open ? 'invisible' : ''}`}
+            className={`hidden min-h-11 items-center gap-2 rounded-full border border-bronze/40 bg-bronze/10 px-4 text-xs font-semibold tracking-[0.08em] text-bronze uppercase transition-[background-color,color,border-color] duration-300 hover:bg-bronze hover:text-espresso focus-visible:bg-bronze focus-visible:text-espresso sm:inline-flex ${open ? 'invisible' : ''}`}
             title="Open the In-Café QR Digital Menu"
           >
-            <span>📱 In-Café Menu</span>
+            <Coffee aria-hidden="true" size={15} strokeWidth={1.8} />
+            <span>In-Café Menu</span>
           </button>
-          <a href="#menu" onClick={go('menu')} className={`btn btn-primary hidden min-h-11 sm:inline-flex ${open ? 'invisible' : ''}`}>
-            Explore Menu
-          </a>
           <button
             ref={toggleRef}
             type="button"
@@ -122,12 +119,12 @@ export function Navbar() {
           >
             <span className="relative block h-3 w-5">
               <span
-                className={`absolute left-0 h-px w-5 bg-ivory transition-transform duration-500 ease-[var(--ease-cinema)] ${
+                className={`absolute left-0 h-0.5 w-5 bg-ivory transition-transform duration-500 ease-[var(--ease-cinema)] ${
                   open ? 'top-1.5 rotate-45' : 'top-0'
                 }`}
               />
               <span
-                className={`absolute left-0 h-px bg-ivory transition-all duration-500 ease-[var(--ease-cinema)] ${
+                className={`absolute left-0 h-0.5 bg-ivory transition-[width,transform,top] duration-500 ease-[var(--ease-cinema)] ${
                   open ? 'top-1.5 w-5 -rotate-45' : 'top-3 w-3'
                 }`}
               />
@@ -151,27 +148,21 @@ export function Navbar() {
             exit={{ opacity: 0 }}
             transition={{ duration: reduceMotion ? 0 : 0.28, ease: EASE_CINEMA }}
           >
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0"
-              style={{ background: 'radial-gradient(80% 60% at 80% 0%, rgba(117,81,61,0.2), transparent 60%)' }}
-            />
             <motion.ul
-              className="container-x relative mt-28 flex flex-col"
+              className="container-x relative mt-28 flex flex-col gap-2"
               initial="hidden"
               animate="show"
               exit="hidden"
               variants={{ hidden: {}, show: { transition: { staggerChildren: reduceMotion ? 0 : 0.05, delayChildren: reduceMotion ? 0 : 0.08 } } }}
             >
-              {navLinks.map((l, i) => (
-                <li key={l.id} className="overflow-hidden border-b border-ivory/10">
+              {navLinks.map((l) => (
+                <li key={l.id} className="overflow-hidden">
                   <motion.a
                     href={`#${l.id}`}
                     onClick={go(l.id)}
-                    className="display flex min-h-16 items-baseline gap-4 py-3 text-[clamp(2.4rem,12vw,4.5rem)] text-ivory transition-colors active:text-bronze-light"
+                    className="display flex min-h-16 items-baseline py-3 text-[clamp(2.4rem,12vw,4.5rem)] text-ivory transition-colors hover:text-bronze-light focus-visible:text-bronze-light active:text-bronze-light"
                     variants={{ hidden: { y: reduceMotion ? '0%' : '100%' }, show: { y: '0%', transition: { duration: reduceMotion ? 0 : 0.45, ease: EASE_OUT } } }}
                   >
-                    <span className="label text-bronze">0{i + 1}</span>
                     {l.label}
                   </motion.a>
                 </li>
@@ -190,13 +181,11 @@ export function Navbar() {
                   window.history.pushState({}, '', '?view=menu')
                   window.dispatchEvent(new Event('popstate'))
                 }}
-                className="btn btn-ghost w-full border border-bronze/40 text-bronze uppercase tracking-wider text-xs"
+                className="btn btn-ghost min-h-14 w-full border border-bronze/40 text-bronze uppercase tracking-[0.08em] text-xs"
               >
-                📱 Open In-Café QR Menu
+                <Coffee aria-hidden="true" size={16} strokeWidth={1.8} />
+                Open In-Café QR Menu
               </button>
-              <a href="#menu" onClick={go('menu')} className="btn btn-primary w-full">
-                Explore Menu
-              </a>
               <p className="label text-center text-ivory/50">{business.tagline}</p>
             </motion.div>
           </motion.div>

@@ -3,3 +3,22 @@ dist
 *.local
 drive_downloads/
 public/videos/*.mp4
+public/images/google-reviews/
+data/menu-store.json
+data/menu-store.json.*.tmp
+
+.env
+.env.*
+!.env.example
+
+# Local Studio runtime and migration recovery artifacts
+.sanity/
+data/backups/
+studio/package-lock.before-repair.json
+
+# Local package-manager credentials and private key material
+.npmrc
+*.pem
+*.key
+*.p12
+*.pfx

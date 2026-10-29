@@ -74,7 +74,7 @@ export function Footer() {
 
         <div className="flex flex-col gap-4 pt-8 text-xs text-ivory/65 sm:flex-row sm:items-center sm:justify-between">
           <p>
-            © {new Date().getFullYear()} {business.name}. Showcase website — no online ordering.
+            © {new Date().getFullYear()} {business.name}. Website with digital menu.
           </p>
           <a href="#top" onClick={go('top')} className="label link-underline w-fit text-ivory/60 hover:text-ivory">
             Back to top ↑

@@ -1,10 +1,10 @@
 import { motion, useReducedMotion } from 'motion/react'
-import type { MouseEvent, ReactNode } from 'react'
+import { ArrowUpRight, Camera, MapPin } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { business } from '../data/business'
 import { images } from '../data/images'
 import { SectionHeading } from '../components/SectionHeading'
 import { EASE_OUT } from '../lib/motion'
-import { scrollToId } from '../lib/scroll'
 
 function Detail({ label, children, pending }: { label: string; children: ReactNode; pending?: boolean }) {
   return (
@@ -16,15 +16,13 @@ function Detail({ label, children, pending }: { label: string; children: ReactNo
 }
 
 const PENDING = 'Awaiting verified details from Cafe In'
+const DIRECTIONS_URL = 'https://maps.app.goo.gl/b53d1Gxnwcnpeb1QA'
+const INSTAGRAM_URL = 'https://www.instagram.com/cafein.cafein'
+const ADDITIONAL_PHONE = '+91 99379 63773'
 
 export function VisitUsSection() {
-  const { address, directionsUrl, mapEmbedUrl, phone, email, hours, socials } = business
+  const { address, mapEmbedUrl, phone, hours } = business
   const reduceMotion = useReducedMotion()
-
-  const toMenu = (e: MouseEvent) => {
-    e.preventDefault()
-    scrollToId('menu')
-  }
 
   return (
     <section id="visit" aria-labelledby="visit-title" className="relative overflow-hidden bg-espresso-2 py-24 sm:py-32 lg:py-40">
@@ -33,10 +31,10 @@ export function VisitUsSection() {
           <SectionHeading id="visit-title" eyebrow="Visit Us" title="Pull up" italic="a chair." />
           <motion.dl
             className="mt-12"
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
+            initial={reduceMotion ? false : { opacity: 0, y: 24 }}
+            whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 1, ease: EASE_OUT }}
+            transition={{ duration: reduceMotion ? 0 : 1, ease: EASE_OUT }}
           >
             <Detail label="Address" pending={!address}>
               {address ?? PENDING}
@@ -55,45 +53,36 @@ export function VisitUsSection() {
                 PENDING
               )}
             </Detail>
-            <Detail label="Contact" pending={!phone && !email}>
-              {phone || email ? (
-                <span className="flex flex-col gap-1">
-                  {phone && (
-                    <a className="link-underline w-fit" href={`tel:${phone.replace(/\s/g, '')}`}>
-                      {phone}
-                    </a>
-                  )}
-                  {email && (
-                    <a className="link-underline w-fit" href={`mailto:${email}`}>
-                      {email}
-                    </a>
-                  )}
-                </span>
-              ) : (
-                PENDING
-              )}
+            <Detail label="Phone">
+              <span className="flex flex-col items-start gap-2">
+                {phone && (
+                  <a className="link-underline inline-flex min-h-11 items-center" href={`tel:${phone.replace(/\s/g, '')}`}>
+                    {phone}
+                  </a>
+                )}
+                <a className="link-underline inline-flex min-h-11 items-center" href={`tel:${ADDITIONAL_PHONE.replace(/\s/g, '')}`}>
+                  {ADDITIONAL_PHONE}
+                </a>
+              </span>
             </Detail>
-            {socials.length > 0 && (
-              <Detail label="Follow">
-                <span className="flex flex-wrap gap-5">
-                  {socials.map((s) => (
-                    <a key={s.href} className="link-underline" href={s.href} target="_blank" rel="noreferrer">
-                      {s.label}
-                    </a>
-                  ))}
-                </span>
-              </Detail>
-            )}
+            <Detail label="Email" pending>
+              Email address coming soon
+            </Detail>
           </motion.dl>
 
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            {directionsUrl && (
-              <a href={directionsUrl} target="_blank" rel="noreferrer" className="btn btn-primary">
-                Get directions <span aria-hidden="true">↗</span>
-              </a>
-            )}
-            <a href="#menu" onClick={toMenu} className={directionsUrl ? 'btn btn-ghost' : 'btn btn-primary'}>
-              Explore the menu
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <a href={DIRECTIONS_URL} target="_blank" rel="noopener noreferrer" className="btn btn-primary min-h-12">
+              Get directions <ArrowUpRight aria-hidden="true" size={16} strokeWidth={1.7} />
+            </a>
+            <a
+              href={INSTAGRAM_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Visit Cafe In on Instagram (opens in a new tab)"
+              className="btn btn-ghost min-h-12 gap-2"
+            >
+              <Camera aria-hidden="true" size={16} strokeWidth={1.7} />
+              Instagram
             </a>
           </div>
         </div>
@@ -132,14 +121,21 @@ export function VisitUsSection() {
                 <rect width="100%" height="100%" fill="url(#map-grid)" />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center">
-                <span className="relative flex h-14 w-14 items-center justify-center">
+                <span className="relative flex h-14 w-14 items-center justify-center text-bronze-light">
                   <span className="absolute inset-0 rounded-full border border-bronze/60" />
-                  <span className="h-3 w-3 rounded-full bg-bronze" />
+                  <MapPin aria-hidden="true" size={22} strokeWidth={1.5} />
                 </span>
-                <p className="display mt-6 text-3xl text-ivory italic">Map coming soon</p>
-                <p className="mt-3 max-w-xs text-sm text-ivory-2">
-                  An interactive map and directions link appear here once Cafe In confirms its official address.
-                </p>
+                <p className="label mt-6 text-bronze-light">Cafe In · Nabarangpur</p>
+                <p className="display mt-3 text-3xl text-ivory italic">Near ICICI Bank</p>
+
+                <a
+                  href={DIRECTIONS_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="link-underline mt-5 inline-flex min-h-11 items-center text-sm text-ivory focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-bronze"
+                >
+                  Open the location in Google Maps <ArrowUpRight aria-hidden="true" className="ml-1" size={15} />
+                </a>
               </div>
             </>
           )}

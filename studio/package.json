@@ -1,0 +1,44 @@
+{
+  "name": "cafe-in-sanity-studio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "sanity dev",
+    "build": "sanity build",
+    "check:types": "tsc --noEmit",
+    "check:schema": "sanity schemas validate --workspace default",
+    "check": "npm run check:types && npm run check:schema",
+    "backup:source": "node scripts/backup-content.mjs",
+    "test:migration-source": "node --test scripts/source-data.test.mjs",
+    "migration:dry-run": "node scripts/migrate-content.mjs",
+    "migration:preflight": "sanity exec scripts/preflight.mjs --with-user-token",
+    "check:auth": "sanity exec scripts/check-auth.mjs --with-user-token",
+    "verify:migration": "sanity exec scripts/verify-migration.mjs --with-user-token",
+    "migration:apply-drafts": "sanity exec scripts/apply-drafts.mjs --with-user-token"
+  },
+  "dependencies": {
+    "@sanity/client": "^7.28.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "sanity": "^6.21.0",
+    "styled-components": "^6.1.15"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^6.0.3"
+  },
+  "overrides": {
+    "@vercel/frameworks": {
+      "js-yaml": "3.15.2",
+      "smol-toml": "1.9.1"
+    },
+    "@module-federation/dts-plugin": {
+      "undici": "7.30.1"
+    }
+  }
+}

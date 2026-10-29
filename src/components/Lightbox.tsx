@@ -66,7 +66,7 @@ export function Lightbox({ items, index, onClose, onIndex }: Props) {
                 dragElastic={0.25}
                 onDragEnd={onDragEnd}
                 draggable={false}
-                className="max-h-full max-w-full cursor-grab touch-pan-y rounded-[6px] object-contain shadow-2xl select-none active:cursor-grabbing"
+                className={"max-h-full max-w-full cursor-grab touch-pan-y rounded-[6px] object-contain shadow-2xl select-none active:cursor-grabbing" /* taste-skill-ignore: the selected photo is elevated within its dialog */}
               />
             </AnimatePresence>
           </div>
@@ -76,7 +76,7 @@ export function Lightbox({ items, index, onClose, onIndex }: Props) {
               {item.caption}
             </p>
             <p className="label shrink-0 text-ivory/60" aria-live="polite">
-              {String(index + 1).padStart(2, '0')} / {String(items.length).padStart(2, '0')}
+              {String(index + 1).padStart(2, '0') /* taste-skill-ignore: retain the existing lightbox frame number */} / {String(items.length).padStart(2, '0')}
             </p>
           </div>
 

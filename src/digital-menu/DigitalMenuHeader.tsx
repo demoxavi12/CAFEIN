@@ -7,6 +7,7 @@ interface Props {
   onModeChange: (m: 'deck' | 'rails') => void
   onOpenSearch: () => void
   onOpenAdmin: () => void
+  showAdminButton: boolean
   onExitMenu: () => void
   tableNumber: string
   setTableNumber: (t: string) => void
@@ -17,6 +18,7 @@ export function DigitalMenuHeader({
   onModeChange,
   onOpenSearch,
   onOpenAdmin,
+  showAdminButton,
   onExitMenu,
   tableNumber,
   setTableNumber,
@@ -29,7 +31,7 @@ export function DigitalMenuHeader({
           <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
           <span className="font-medium tracking-wide">Live In-Café Menu</span>
           <span className="text-ivory/30">•</span>
-          <button
+          {showAdminButton && <button
             type="button"
             onClick={() => {
               const next = prompt('Enter your Table Number:', tableNumber)
@@ -39,7 +41,7 @@ export function DigitalMenuHeader({
             title="Tap to change table number"
           >
             Table: {tableNumber}
-          </button>
+          </button>}
         </div>
 
         {/* Route back to Main Website Link */}

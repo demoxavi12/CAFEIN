@@ -17,7 +17,7 @@ interface Props {
 }
 
 export function DigitalMenuView({ onExitMenu }: Props) {
-  const { items } = useLiveMenu()
+  const { items, loading: menuLoading, error: menuError, dataSource } = useLiveMenu()
   const { tray, addItem, removeItem, clearTray } = useCustomerTray()
 
   // Initialize state directly from URL search params without cascading effects
@@ -49,6 +49,7 @@ export function DigitalMenuView({ onExitMenu }: Props) {
         onModeChange={setMode}
         onOpenSearch={() => setIsSearchOpen(true)}
         onOpenAdmin={() => setIsAdminOpen(true)}
+        showAdminButton={dataSource === 'legacy'}
         onExitMenu={onExitMenu}
         tableNumber={tableNumber}
         setTableNumber={setTableNumber}
@@ -92,7 +93,14 @@ export function DigitalMenuView({ onExitMenu }: Props) {
 
       {/* Main Presentation Body */}
       <main className="flex-1 w-full max-w-5xl mx-auto">
-        {mode === 'deck' ? (
+        {menuLoading ? (
+          <p role="status" className="px-5 py-16 text-center text-sm text-ivory/60">Loading the current menu…</p>
+        ) : menuError ? (
+          <div role="alert" className="mx-4 my-10 rounded-2xl border border-bronze/25 bg-espresso-2 p-6 text-center">
+            <p className="font-display text-lg text-ivory">The menu is temporarily unavailable.</p>
+            <p className="mt-2 text-sm text-ivory/60">{menuError}</p>
+          </div>
+        ) : mode === 'deck' ? (
           <ConceptDeckCarousel
             items={items}
             tray={tray}

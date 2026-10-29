@@ -18,7 +18,7 @@ const verifiedFeaturedItems: MenuItem[] = specials.ids
   .filter((m): m is MenuItem => Boolean(m))
 
 // Temporary carousel entries for layout evaluation; replace with verified menu details later.
-const temporaryItems: MenuItem[] = [
+export const temporaryItems: MenuItem[] = [
   { id: 'temp-cappuccino', name: 'Honeycomb Cappuccino', price: 140, category: 'beverages', section: 'Temporary Coffee Specials', description: 'A creamy cappuccino with a gentle honey sweetness and a soft cocoa finish.', image: images.lantern },
   { id: 'temp-chocolate-tart', name: 'Dark Chocolate Tart', price: 190, category: 'desserts', section: 'Temporary Sweet Treats', description: 'A rich chocolate tart with a crisp pastry shell and a smooth, bittersweet centre.', image: images.biscoffCheesecake },
   { id: 'temp-herb-pasta', name: 'Garden Herb Pasta', price: 220, category: 'meals', section: 'Temporary Café Plates', description: 'A comforting pasta tossed with herbs, seasonal vegetables and a light cream sauce.', image: images.alfredoPenne },

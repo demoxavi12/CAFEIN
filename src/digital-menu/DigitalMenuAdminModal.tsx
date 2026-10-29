@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ImageAsset } from '../data/images'
 import type { MenuCategory } from '../data/menu'
 import {
+  AdminApiError,
   checkAdminSession,
   discardMenuPhoto,
   loginAdmin,
@@ -23,7 +24,8 @@ interface Props {
 interface ItemEditorProps {
   item: EnhancedMenuItem
   categories: MenuCategory[]
-  onSave: (item: EnhancedMenuItem) => Promise<void>
+  conflict: boolean
+  onSave: (item: EnhancedMenuItem) => Promise<EnhancedMenuItem>
 }
 
 function PhotoUploadField({
@@ -111,13 +113,13 @@ function PhotoUploadField({
       <div className="flex min-w-0 items-center gap-3">
         {showingDifferentPhoto && original && (
           <div className="shrink-0">
-            <img src={original.src} alt="Current saved menu photo" width={80} height={60} className="h-14 w-16 rounded-lg border border-ivory/10 object-cover" />
+            <img src={original.src} alt="Current saved menu photo" width={80} height={64} className="h-16 w-20 rounded-lg border border-ivory/10 object-cover" />
             <span className="mt-1 block text-center text-[9px] text-ivory/45">Current</span>
           </div>
         )}
         {previewSrc ? (
           <div className="shrink-0">
-            <img src={previewSrc} alt={value?.alt || 'Menu item photo preview'} width={96} height={72} className="h-14 w-16 rounded-lg border border-ivory/10 object-cover" />
+            <img src={previewSrc} alt={value?.alt || 'Menu item photo preview'} width={80} height={64} className="h-16 w-20 rounded-lg border border-ivory/10 object-cover" />
             {(showingDifferentPhoto || original) && <span className="mt-1 block text-center text-[9px] text-ivory/45">{showingDifferentPhoto ? 'Replacement' : 'Current'}</span>}
           </div>
         ) : (
@@ -146,17 +148,38 @@ function PhotoUploadField({
   )
 }
 
-function ItemEditor({ item, categories, onSave }: ItemEditorProps) {
+function ItemEditor({ item, categories, conflict, onSave }: ItemEditorProps) {
   const [draft, setDraft] = useState(item)
+  const [baseItem, setBaseItem] = useState(item)
+  const [externalChange, setExternalChange] = useState(false)
   const [busy, setBusy] = useState(false)
   const [photoBusy, setPhotoBusy] = useState(false)
+  const isDirty = JSON.stringify(draft) !== JSON.stringify(baseItem)
+
+  if (item !== baseItem) {
+    const hasLocalEdits = JSON.stringify(draft) !== JSON.stringify(baseItem)
+    setBaseItem(item)
+    if (hasLocalEdits) setExternalChange(true)
+    else setDraft(item)
+  }
 
   const update = <K extends keyof EnhancedMenuItem>(key: K, value: EnhancedMenuItem[K]) => {
     setDraft((current) => ({ ...current, [key]: value }))
   }
 
   return (
-    <article className="rounded-2xl border border-ivory/10 bg-ivory/5 p-3 text-xs">
+    <article className="rounded-2xl border border-ivory/10 bg-ivory/[0.045] p-4 text-xs sm:p-5">
+      <div className="mb-4 flex min-w-0 items-center gap-3 border-b border-ivory/10 pb-3">
+        <div className="flex h-16 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-ivory/10 bg-black/25">
+          {item.image?.src ? <img src={item.image.src} alt="" width={80} height={64} loading="lazy" decoding="async" className="h-full w-full object-cover" /> : <span className="text-[9px] uppercase tracking-wide text-ivory/40">No photo</span>}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-display text-base text-ivory">{item.name}</p>
+          <p className="mt-1 truncate text-[10px] text-ivory/55">{categories.find((category) => category.id === item.category)?.label || item.category} · ₹{item.price}</p>
+        </div>
+        <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[9px] font-semibold uppercase tracking-wide ${item.isSoldOut ? 'border-red-300/25 bg-red-300/10 text-red-200' : 'border-emerald-300/20 bg-emerald-300/10 text-emerald-200'}`}>{item.isSoldOut ? 'Sold out' : 'In stock'}</span>
+      </div>
+      {(externalChange || conflict) && <p role="status" className="mb-3 rounded-lg border border-amber-200/20 bg-amber-200/[0.07] px-3 py-2 text-[11px] leading-relaxed text-amber-100">This item changed in another view. Your edits are preserved; reload the latest menu before saving.</p>}
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_6rem_10rem]">
         <label className="grid gap-1 text-[10px] uppercase tracking-wide text-ivory/50">
           Item name
@@ -185,21 +208,21 @@ function ItemEditor({ item, categories, onSave }: ItemEditorProps) {
         <PhotoUploadField value={draft.image} original={item.image} onChange={(image) => update('image', image ? { ...image, alt: draft.name } : undefined)} onUploadingChange={setPhotoBusy} />
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-ivory/10 pt-3">
-        <button type="button" onClick={() => update('isSoldOut', !draft.isSoldOut)} className={`min-h-9 rounded-full border px-3 text-[10px] font-bold uppercase ${draft.isSoldOut ? 'border-red-500/50 bg-red-500/15 text-red-200' : 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200'}`}>
+        <button type="button" onClick={() => update('isSoldOut', !draft.isSoldOut)} className={`min-h-11 rounded-full border px-3 text-[10px] font-bold uppercase ${draft.isSoldOut ? 'border-red-500/50 bg-red-500/15 text-red-200' : 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200'}`}>
           {draft.isSoldOut ? 'Sold out' : 'In stock'}
         </button>
         <label className="flex min-h-9 items-center gap-2 text-[10px] text-ivory/55">
           Badge
-          <select value={draft.badge || ''} onChange={(event) => update('badge', event.target.value || undefined)} className="rounded-lg border border-ivory/15 bg-espresso px-2 py-2 text-[10px] text-ivory focus:border-bronze focus:outline-none">
+          <select value={draft.badge || ''} onChange={(event) => update('badge', event.target.value || undefined)} className="min-h-11 rounded-lg border border-ivory/15 bg-espresso px-2 py-2 text-[10px] text-ivory focus:border-bronze focus:outline-none focus-visible:ring-2 focus-visible:ring-bronze/60">
             <option value="">None</option>
             <option value="Bestseller">Bestseller</option>
             <option value="Chef Special">Chef Special</option>
           </select>
         </label>
-        <button type="button" disabled={busy || photoBusy} onClick={async () => { setBusy(true); try { await onSave(draft) } catch { /* Parent displays the request error. */ } finally { setBusy(false) } }} className="btn btn-primary ml-auto min-h-9 px-3 text-[10px] disabled:opacity-50">
+        <button type="button" disabled={busy || photoBusy || externalChange || conflict || !isDirty} onClick={async () => { setBusy(true); try { const saved = await onSave(draft); setDraft(saved); setBaseItem(saved); setExternalChange(false) } catch { /* Parent displays the request error. */ } finally { setBusy(false) } }} className="btn btn-primary ml-auto min-h-11 px-4 text-[10px] disabled:opacity-50">
           {photoBusy ? 'Uploading photo…' : busy ? 'Saving…' : 'Save changes'}
         </button>
-        <button type="button" disabled title="Use Sanity Studio after editorial review. Deletion is not available in this draft-only manager." className="min-h-9 rounded-lg border border-ivory/10 px-3 text-[10px] text-ivory/40 disabled:opacity-60">
+        <button type="button" disabled title="Use Sanity Studio after editorial review. Deletion is not available in this draft-only manager." className="min-h-11 rounded-lg border border-ivory/10 px-3 text-[10px] text-ivory/40 disabled:opacity-60">
           Delete in Studio
         </button>
       </div>
@@ -208,7 +231,6 @@ function ItemEditor({ item, categories, onSave }: ItemEditorProps) {
 }
 
 export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
-  const { items, categories, loading, error, refresh, saveItem, exportMenu, previewImport, applyImport } = useLiveMenu({ forceLegacy: true })
   const [password, setPassword] = useState('')
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
@@ -226,20 +248,26 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
   const [pendingPreview, setPendingPreview] = useState<ImportPreview | null>(null)
   const [legacyAvailable, setLegacyAvailable] = useState(false)
   const [pendingLegacy, setPendingLegacy] = useState(false)
+  const [revisionConflict, setRevisionConflict] = useState(false)
+  const [editorResetVersion, setEditorResetVersion] = useState(0)
   const dialogRef = useRef<HTMLDivElement>(null)
+  const onCloseRef = useRef(onClose)
+  const { items, categories, loading, error, refresh, saveItem, exportMenu, previewImport, applyImport } = useLiveMenu({ forceLegacy: true, managerMode: isAuthenticated })
+
+  useEffect(() => { onCloseRef.current = onClose }, [onClose])
 
   useEffect(() => {
     if (!isOpen) return
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const dialog = dialogRef.current
     const getFocusable = () => Array.from(dialog?.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])',
     ) || [])
     getFocusable()[0]?.focus()
     const handleDialogKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault()
-        onClose()
+        onCloseRef.current()
       }
       if (event.key === 'Tab') {
         const elements = getFocusable()
@@ -272,7 +300,7 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
       document.removeEventListener('keydown', handleDialogKey)
       if (previousFocus?.isConnected) previousFocus.focus()
     }
-  }, [isOpen, onClose])
+  }, [isOpen])
 
   const filteredItems = useMemo(() => items.filter((item) => {
     const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory
@@ -286,6 +314,30 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
     setSuccessMsg('')
     setErrorMsg(cause instanceof Error ? cause.message : 'The request could not be completed.')
     if (cause instanceof Error && /authentication required|session has expired/i.test(cause.message)) setIsAuthenticated(false)
+  }
+
+  const reportRevisionConflict = () => {
+    setSuccessMsg('')
+    setRevisionConflict(true)
+    setErrorMsg('The shared menu changed after this editor loaded. Your current edits remain on screen; review the conflict and reload only when you are ready to discard them.')
+  }
+
+  const handleReloadLatest = async () => {
+    if (!window.confirm('Reload the latest manager menu? This will discard unsaved edits in open item forms.')) return
+    setBusy(true)
+    try {
+      const snapshot = await refresh()
+      if (!snapshot) throw new Error('The latest manager menu could not be loaded. Your current edits remain on screen.')
+      if (pendingBackup) {
+        const refreshedPreview = await previewImport(pendingBackup)
+        setPendingPreview(refreshedPreview)
+      }
+      setEditorResetVersion((version) => version + 1)
+      setRevisionConflict(false)
+      setErrorMsg('')
+      setSuccessMsg(pendingBackup ? 'Latest menu drafts reloaded. The selected backup preview was checked again against the new revision.' : 'Latest menu drafts reloaded. Search and category filters were kept in place.')
+    } catch (cause) { reportError(cause) }
+    finally { setBusy(false) }
   }
 
   const handleUnlock = async (event: React.FormEvent) => {
@@ -306,14 +358,17 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
     }
   }
 
-  const handleSave = async (item: EnhancedMenuItem) => {
+  const handleSave = async (item: EnhancedMenuItem): Promise<EnhancedMenuItem> => {
     try {
-      await saveItem(item.image ? { ...item, image: { ...item.image, alt: item.name } } : item)
+      const saved = await saveItem(item.image ? { ...item, image: { ...item.image, alt: item.name } } : item)
       setErrorMsg('')
+      setRevisionConflict(false)
       setSuccessMsg(`${item.name} saved as an unpublished draft.`)
+      return saved
     } catch (cause) {
-      reportError(cause)
-      if (cause instanceof Error && cause.message.includes('changed in another session')) await refresh()
+      if (cause instanceof AdminApiError && cause.status === 409) reportRevisionConflict()
+      else reportError(cause)
+      throw cause
     }
   }
 
@@ -334,9 +389,11 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
       setNewDescription('')
       setNewImage(undefined)
       setErrorMsg('')
+      setRevisionConflict(false)
       setSuccessMsg(`${name} added as an unpublished draft.`)
     } catch (cause) {
-      reportError(cause)
+      if (cause instanceof AdminApiError && cause.status === 409) reportRevisionConflict()
+      else reportError(cause)
     }
   }
 
@@ -401,10 +458,11 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
       setPendingPreview(null)
       setPendingLegacy(false)
       setErrorMsg('')
+      setRevisionConflict(false)
       setSuccessMsg(`Menu backup saved as drafts. ${snapshot.items.length} items are available for review.`)
     } catch (cause) {
-      reportError(cause)
-      if (cause instanceof Error && cause.message.includes('changed in another session')) await refresh()
+      if (cause instanceof AdminApiError && cause.status === 409) reportRevisionConflict()
+      else reportError(cause)
     } finally { setBusy(false) }
   }
 
@@ -429,18 +487,18 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-3 sm:p-6" role="presentation">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="manager-title" className="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-bronze/35 bg-espresso-2 p-4 text-ivory shadow-2xl sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-0 sm:p-4 lg:p-6" role="presentation">
+      <div data-ui="manager-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="manager-title" className="relative flex h-[100dvh] max-h-[100dvh] w-full max-w-none flex-col overflow-hidden border-bronze/35 bg-espresso-2 p-4 text-ivory shadow-2xl sm:h-auto sm:max-h-[94dvh] sm:max-w-6xl sm:rounded-3xl sm:border sm:p-6 xl:max-w-7xl">
         <div className="flex items-start justify-between gap-3 border-b border-ivory/10 pb-4">
           <div>
-            <h3 id="manager-title" className="font-display text-lg text-ivory">Cafe In Manager Portal</h3>
-            <p className="mt-1 text-[11px] text-bronze/80">Manage Sanity menu drafts</p>
+            <h3 id="manager-title" className="font-display text-xl text-ivory sm:text-2xl">Cafe In Manager Portal</h3>
+            <p className="mt-1 text-[11px] text-bronze/80">Menu drafts · review before publishing</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close manager portal" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ivory/10 text-ivory/70 transition-colors hover:bg-ivory/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze">Ã—</button>
+          <button type="button" onClick={onClose} aria-label="Close manager portal" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-ivory/10 text-2xl leading-none text-ivory/70 transition-colors hover:bg-ivory/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze">&times;</button>
         </div>
 
         {!isAuthenticated ? (
-          <form onSubmit={handleUnlock} className="flex flex-col items-center justify-center px-4 py-10 text-center sm:py-14">
+          <form onSubmit={handleUnlock} className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-10 text-center sm:py-14">
             <p className="label mb-3 text-bronze">Cafe In · Manager</p>
             <h4 className="font-display text-xl text-ivory">Manager sign in</h4>
             <p className="mt-2 max-w-sm text-xs leading-relaxed text-ivory/60">Use your manager password to access menu controls.</p>
@@ -452,36 +510,51 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
           </form>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col pt-3">
-            <div className="flex flex-wrap items-center justify-between gap-2 pb-3">
-              <p className="text-[11px] text-ivory/55">Saving creates an unpublished draft. Publish only after approval.</p>
+            <div className="flex flex-col gap-3 border-b border-ivory/10 pb-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-xs font-medium text-ivory">Draft menu workspace</p>
+                <p className="mt-1 text-[11px] text-ivory/55">Changes stay unpublished. Review them before choosing to publish.</p>
+              </div>
               <div className="flex flex-wrap items-center gap-2">
-                <button type="button" disabled={busy || loading} onClick={() => void handlePublish()} className="min-h-9 rounded-lg border border-bronze/45 bg-bronze/10 px-3 text-[10px] font-semibold text-bronze hover:bg-bronze/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze disabled:opacity-50">Publish approved menu</button>
-                {legacyAvailable && <button type="button" onClick={() => void handleLegacyPreview()} className="min-h-9 rounded-lg border border-bronze/30 px-3 text-[10px] text-bronze hover:border-bronze/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze">Review saved browser edits</button>}
-                <button type="button" onClick={() => void handleLogout()} className="min-h-9 rounded-lg border border-ivory/15 px-3 text-[10px] text-ivory/70 hover:border-ivory/30 hover:text-ivory focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze">Sign out</button>
+                <button type="button" disabled={busy || loading} onClick={() => void handlePublish()} className="min-h-11 rounded-lg border border-bronze/45 bg-bronze/10 px-4 text-[10px] font-semibold text-bronze hover:bg-bronze/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze disabled:opacity-50">Publish approved menu</button>
+                {legacyAvailable && <button type="button" onClick={() => void handleLegacyPreview()} className="min-h-11 rounded-lg border border-bronze/30 px-4 text-[10px] text-bronze hover:border-bronze/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze">Review saved browser edits</button>}
+                <button type="button" onClick={() => void handleLogout()} className="min-h-11 rounded-lg border border-ivory/15 px-4 text-[10px] text-ivory/70 hover:border-ivory/30 hover:text-ivory focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze">Sign out</button>
               </div>
             </div>
 
-            <form onSubmit={handleCreate} className="mb-3 grid grid-cols-1 gap-2 rounded-2xl border border-bronze/20 bg-black/20 p-3 sm:grid-cols-2 lg:grid-cols-[1.3fr_6rem_1fr_1.6fr_auto]">
-              <label className="grid gap-1 text-[10px] uppercase tracking-wide text-ivory/50">New item<input value={newName} onChange={(event) => setNewName(event.target.value)} maxLength={80} required placeholder="Item name" className="min-h-10 rounded-lg border border-ivory/15 bg-black/30 px-2.5 text-xs normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none" /></label>
-              <label className="grid gap-1 text-[10px] uppercase tracking-wide text-ivory/50">Price · ₹<input type="number" min="0" max="100000" step="1" value={newPrice} onChange={(event) => setNewPrice(event.target.value)} required placeholder="0" className="min-h-10 rounded-lg border border-ivory/15 bg-black/30 px-2.5 text-xs normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none" /></label>
-              <label className="grid gap-1 text-[10px] uppercase tracking-wide text-ivory/50">Category<select value={newCategory} onChange={(event) => setNewCategory(event.target.value)} className="min-h-10 rounded-lg border border-ivory/15 bg-espresso px-2.5 text-xs normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none">{categories.map((category) => <option key={category.id} value={category.id}>{category.label}</option>)}</select></label>
-              <label className="grid gap-1 text-[10px] uppercase tracking-wide text-ivory/50">Description<input value={newDescription} onChange={(event) => setNewDescription(event.target.value)} maxLength={500} placeholder="Optional" className="min-h-10 rounded-lg border border-ivory/15 bg-black/30 px-2.5 text-xs normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none" /></label>
-              <button type="submit" disabled={newPhotoBusy} className="btn btn-primary min-h-10 self-end px-3 text-[10px] disabled:opacity-50">{newPhotoBusy ? 'Uploading photo…' : 'Add item'}</button>
-              <div className="sm:col-span-2 lg:col-span-5"><PhotoUploadField value={newImage} onChange={setNewImage} onUploadingChange={setNewPhotoBusy} /></div>
-            </form>
+            <details className="group my-3 shrink-0 rounded-2xl border border-bronze/25 bg-black/15">
+              <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-2 text-xs font-medium text-ivory marker:hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze">
+                <span>Add a menu item <span className="ml-2 font-normal text-ivory/50">Create an unpublished draft</span></span>
+                <span aria-hidden="true" className="text-lg leading-none text-bronze transition-transform group-open:rotate-45">+</span>
+              </summary>
+      <form onSubmit={handleCreate} className="grid max-h-[45dvh] grid-cols-1 gap-3 overflow-y-auto overscroll-contain border-t border-ivory/10 p-4 sm:grid-cols-2 lg:max-h-[42dvh] lg:grid-cols-[1.3fr_7rem_1fr_1.5fr_auto]">
+                <label className="grid gap-1.5 text-[10px] uppercase tracking-wide text-ivory/55">Item name<input value={newName} onChange={(event) => setNewName(event.target.value)} maxLength={80} required placeholder="Item name" className="min-h-11 rounded-lg border border-ivory/15 bg-black/30 px-3 text-sm normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none focus-visible:ring-2 focus-visible:ring-bronze/60" /></label>
+                <label className="grid gap-1.5 text-[10px] uppercase tracking-wide text-ivory/55">Price &#8377;<input type="number" min="0" max="100000" step="1" value={newPrice} onChange={(event) => setNewPrice(event.target.value)} required placeholder="0" className="min-h-11 rounded-lg border border-ivory/15 bg-black/30 px-3 text-sm normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none focus-visible:ring-2 focus-visible:ring-bronze/60" /></label>
+                <label className="grid gap-1.5 text-[10px] uppercase tracking-wide text-ivory/55">Category<select value={newCategory} onChange={(event) => setNewCategory(event.target.value)} className="min-h-11 rounded-lg border border-ivory/15 bg-espresso px-3 text-sm normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none focus-visible:ring-2 focus-visible:ring-bronze/60">{categories.map((category) => <option key={category.id} value={category.id}>{category.label}</option>)}</select></label>
+                <label className="grid gap-1.5 text-[10px] uppercase tracking-wide text-ivory/55">Description<input value={newDescription} onChange={(event) => setNewDescription(event.target.value)} maxLength={500} placeholder="Optional" className="min-h-11 rounded-lg border border-ivory/15 bg-black/30 px-3 text-sm normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none focus-visible:ring-2 focus-visible:ring-bronze/60" /></label>
+                <button type="submit" disabled={newPhotoBusy} className="btn btn-primary min-h-11 self-end px-4 text-[10px] disabled:opacity-50">{newPhotoBusy ? 'Uploading photo...' : 'Add draft'}</button>
+                <div className="sm:col-span-2 lg:col-span-5"><PhotoUploadField value={newImage} onChange={setNewImage} onUploadingChange={setNewPhotoBusy} /></div>
+              </form>
+            </details>
 
-            <div className="grid grid-cols-1 gap-2 pb-3 sm:grid-cols-2">
+            <div className="grid shrink-0 grid-cols-1 gap-2 pb-3 sm:grid-cols-[minmax(0,1fr)_15rem_auto]">
               <label className="sr-only" htmlFor="manager-search">Search menu items</label>
-              <input id="manager-search" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search menu items…" className="min-h-10 rounded-xl border border-ivory/15 bg-black/30 px-3 text-xs text-ivory placeholder:text-ivory/45 focus:border-bronze focus:outline-none" />
+              <input id="manager-search" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by name, section, or description" className="min-h-11 min-w-0 rounded-xl border border-ivory/15 bg-black/30 px-3 text-sm text-ivory placeholder:text-ivory/45 focus:border-bronze focus:outline-none focus-visible:ring-2 focus-visible:ring-bronze/60" />
               <label className="sr-only" htmlFor="manager-category">Filter by category</label>
-              <select id="manager-category" value={selectedCategory} onChange={(event) => setSelectedCategory(event.target.value)} className="min-h-10 rounded-xl border border-ivory/15 bg-espresso px-3 text-xs text-ivory focus:border-bronze focus:outline-none">
+              <select id="manager-category" value={selectedCategory} onChange={(event) => setSelectedCategory(event.target.value)} className="min-h-11 min-w-0 rounded-xl border border-ivory/15 bg-espresso px-3 text-sm text-ivory focus:border-bronze focus:outline-none focus-visible:ring-2 focus-visible:ring-bronze/60">
                 <option value="all">All categories ({items.length})</option>
                 {categories.map((category) => <option key={category.id} value={category.id}>{category.label}</option>)}
               </select>
+              <button type="button" disabled={loading || busy} onClick={() => void handleReloadLatest()} className="min-h-11 rounded-xl border border-ivory/15 px-4 text-xs text-ivory/75 transition-colors hover:border-bronze/50 hover:text-ivory focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bronze disabled:opacity-50">Reload latest</button>
             </div>
 
-            <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto pr-1">
-              {loading ? <p className="py-6 text-center text-xs text-ivory/55">Loading the current menu…</p> : filteredItems.length ? filteredItems.map((item) => <ItemEditor key={JSON.stringify(item)} item={item} categories={categories} onSave={handleSave} />) : <p className="py-6 text-center text-xs text-ivory/55">No menu items match this search.</p>}
+            <div className="mb-2 flex shrink-0 items-center justify-between text-[11px] text-ivory/55">
+              <p aria-live="polite" aria-atomic="true">{loading ? 'Loading menu drafts...' : `${filteredItems.length} of ${items.length} menu items`}</p>
+              <p className="hidden sm:block">Select an item to edit its draft</p>
+            </div>
+
+            <div className="grid min-h-0 flex-1 grid-cols-1 content-start gap-3 overflow-y-auto overscroll-contain pr-1 sm:pr-2 lg:grid-cols-2">
+              {loading ? <p className="py-10 text-center text-sm text-ivory/55">Loading menu drafts...</p> : filteredItems.length ? filteredItems.map((item) => <ItemEditor key={`${item.id}:${editorResetVersion}`} item={item} categories={categories} conflict={revisionConflict} onSave={handleSave} />) : <div className="rounded-2xl border border-dashed border-ivory/15 px-5 py-12 text-center"><p className="font-display text-lg text-ivory">No items found</p><p className="mt-2 text-xs text-ivory/55">Try another search or category filter.</p></div>}
             </div>
 
             {pendingPreview && (
@@ -516,7 +589,7 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
           </div>
         )}
 
-        {(errorMsg || error) && <p role="alert" className="mt-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-200">{errorMsg || error}</p>}
+        {(errorMsg || error) && <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-red-500/10 px-3 py-2"><p role="alert" className="min-w-0 flex-1 text-xs text-red-200">{errorMsg || error}</p>{revisionConflict && <button type="button" disabled={busy} onClick={() => void handleReloadLatest()} className="min-h-10 shrink-0 rounded-lg border border-amber-200/30 px-3 text-[10px] font-semibold text-amber-100 hover:bg-amber-100/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-100 disabled:opacity-50">Reload and discard edits</button>}</div>}
         {successMsg && <p role="status" className="mt-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">{successMsg}</p>}
       </div>
     </div>

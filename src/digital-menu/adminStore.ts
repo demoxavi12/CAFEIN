@@ -31,10 +31,17 @@ export interface ImportPreview {
 const MENU_UPDATED_EVENT = 'cafein_menu_updated'
 let csrfToken: string | null = null
 
+export class AdminApiError extends Error {
+  constructor(message: string, readonly status: number, readonly code?: string) {
+    super(message)
+    this.name = 'AdminApiError'
+  }
+}
+
 async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(url, { credentials: 'same-origin', ...init })
-  const data = await response.json().catch(() => ({})) as T & { error?: string }
-  if (!response.ok) throw new Error(data.error || 'The request could not be completed.')
+  const data = await response.json().catch(() => ({})) as T & { error?: string; code?: string }
+  if (!response.ok) throw new AdminApiError(data.error || 'The request could not be completed.', response.status, data.code)
   return data
 }
 
@@ -130,7 +137,7 @@ export async function checkAdminSession() {
   return snapshot
 }
 
-export function useLiveMenu(options: { forceLegacy?: boolean; draftPreview?: boolean } = {}) {
+export function useLiveMenu(options: { forceLegacy?: boolean; draftPreview?: boolean; managerMode?: boolean } = {}) {
   const [items, setItems] = useState<EnhancedMenuItem[]>([])
   const [categories, setCategories] = useState<MenuCategory[]>([])
   const [revision, setRevision] = useState(0)
@@ -165,6 +172,18 @@ export function useLiveMenu(options: { forceLegacy?: boolean; draftPreview?: boo
 
   const refresh = useCallback(async (): Promise<MenuSnapshot | null> => {
     const requestSequence = ++refreshSequenceRef.current
+    if (options.managerMode) {
+      try {
+        const snapshot = await requestJson<MenuSnapshot>('/api/admin/menu')
+        if (requestSequence !== refreshSequenceRef.current) return null
+        acceptSnapshot(snapshot)
+        return snapshot
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'The manager menu could not be loaded.')
+        setLoading(false)
+        return null
+      }
+    }
     try {
       if (options.draftPreview && !options.forceLegacy) {
         const preview = await fetchLocalDraftPreview()
@@ -202,29 +221,30 @@ export function useLiveMenu(options: { forceLegacy?: boolean; draftPreview?: boo
       setLoading(false)
       return null
     }
-  }, [acceptSnapshot, options.draftPreview, options.forceLegacy])
+  }, [acceptSnapshot, options.draftPreview, options.forceLegacy, options.managerMode])
 
   useEffect(() => {
     const refreshTimer = window.setTimeout(() => { void refresh() }, 0)
-    const pollTimer = window.setInterval(() => { void refresh() }, 30_000)
+    // Draft editors refresh only on explicit action so a background public snapshot cannot replace their revision.
+    const pollTimer = options.managerMode ? undefined : window.setInterval(() => { void refresh() }, 30_000)
     const handleMenuChange = (event: Event) => {
       if (!options.forceLegacy && dataSourceRef.current === 'sanity') return
       const detail = (event as CustomEvent<MenuSnapshot>).detail
       if (detail) acceptSnapshot(detail)
       else void refresh()
     }
-    const handleFocus = () => { if (document.visibilityState === 'visible') void refresh() }
+    const handleFocus = () => { if (!options.managerMode && document.visibilityState === 'visible') void refresh() }
     window.addEventListener(MENU_UPDATED_EVENT, handleMenuChange)
     window.addEventListener('focus', handleFocus)
     document.addEventListener('visibilitychange', handleFocus)
     return () => {
       window.clearTimeout(refreshTimer)
-      window.clearInterval(pollTimer)
+      if (pollTimer !== undefined) window.clearInterval(pollTimer)
       window.removeEventListener(MENU_UPDATED_EVENT, handleMenuChange)
       window.removeEventListener('focus', handleFocus)
       document.removeEventListener('visibilitychange', handleFocus)
     }
-  }, [acceptSnapshot, options.forceLegacy, refresh])
+  }, [acceptSnapshot, options.forceLegacy, options.managerMode, refresh])
 
   const saveSnapshot = useCallback((snapshot: MenuSnapshot) => {
     acceptSnapshot(snapshot)
@@ -239,7 +259,7 @@ export function useLiveMenu(options: { forceLegacy?: boolean; draftPreview?: boo
       body: JSON.stringify(item),
     })
     const snapshot = await requestJson<MenuSnapshot>('/api/admin/menu')
-    if (snapshot.revision !== result.revision) throw new Error('The menu changed while your save was completing. Reload before continuing.')
+    if (snapshot.revision !== result.revision) throw new AdminApiError('The menu changed while your save was completing. Reload before continuing.', 409, 'revision_conflict')
     saveSnapshot(snapshot)
     return snapshot.items.find((entry) => entry.id === item.id)!
   }, [items, saveSnapshot])
@@ -250,7 +270,7 @@ export function useLiveMenu(options: { forceLegacy?: boolean; draftPreview?: boo
       headers: { 'If-Match': `"${revisionRef.current}"` },
     })
     const snapshot = await requestJson<MenuSnapshot>('/api/admin/menu')
-    if (snapshot.revision !== result.revision) throw new Error('The menu changed while your save was completing. Reload before continuing.')
+    if (snapshot.revision !== result.revision) throw new AdminApiError('The menu changed while your save was completing. Reload before continuing.', 409, 'revision_conflict')
     saveSnapshot(snapshot)
   }, [saveSnapshot])
 
@@ -268,7 +288,7 @@ export function useLiveMenu(options: { forceLegacy?: boolean; draftPreview?: boo
       body: JSON.stringify({ backup, confirmReplace: true }),
     })
     const snapshot = await requestJson<MenuSnapshot>('/api/admin/menu')
-    if (snapshot.revision !== result.revision) throw new Error('The menu changed while your import was completing. Reload before continuing.')
+    if (snapshot.revision !== result.revision) throw new AdminApiError('The menu changed while your import was completing. Reload before continuing.', 409, 'revision_conflict')
     saveSnapshot(snapshot)
     return snapshot
   }, [saveSnapshot])

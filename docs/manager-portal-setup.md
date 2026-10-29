@@ -1,33 +1,38 @@
-# Manager portal server setup
+# Vercel Manager Portal and Sanity content
 
-The app now expects a Node.js server for manager authentication and menu persistence. `npm run dev` attaches the API to Vite for local work; production should run `npm run build` followed by `npm start` behind an HTTPS reverse proxy.
+## Production architecture
 
-## Required production configuration
+The public React website is hosted on Vercel. Files under /api are Vercel Node Functions; the catch-all function in api/[...path].mjs serves the same-origin menu and manager endpoints. Published menu reads use Sanity's published perspective only. If Sanity has no complete valid published menu or the read fails, /api/menu returns the tracked seed generated at build time (dist/menu-seed.json). Drafts are never used as a public fallback.
 
-- `ADMIN_PASSWORD_HASH`: create it with `npm run admin:hash`. It generates a one-time random 256-bit manager password and its scrypt hash. Save the password in the password manager and the hash in the server secret manager.
-- `PUBLIC_ORIGIN`: the exact public origin, including scheme and port when nonstandard (for example, `https://cafe.example`). It is required in production for same-origin mutation checks.
-- `MENU_STORE_PATH`: optional absolute path to the persistent menu JSON file. The default is `data/menu-store.json` under the project root. The server creates it from the current menu source only when no store exists; it does not reseed an existing file.
-- `NODE_ENV=production`: enables secure session cookies. Keep the service behind HTTPS for the whole admin session.
+The existing standalone Node/JSON server and R2 adapter remain in the repository for local development and rollback while the Vercel path is reviewed. They are not required by the Vercel deployment. Vite's /api/menu remains backed by the local JSON store. The local draft preview is separate Vite development middleware; the production function returns 404 for /api/preview/sanity-drafts.
 
-## Persistent menu photo storage
+## Required Vercel environment variables
 
-Menu photos are uploaded through the authenticated Cafe In server and stored in Cloudflare R2. The API uses the R2 S3-compatible endpoint with server-side Signature Version 4; object bytes are never written into the menu JSON or the deployment filesystem. Public menu cards store only an image reference and its dimensions.
+Set these in the Vercel project as server-only Production (and Preview only if that environment should have manager access) variables, then create a new deployment:
 
-Configure these values in the server secret manager (and in a local, untracked `.env` file for development):
+- SANITY_API_TOKEN: a Sanity token limited to the production dataset and only the permissions needed to read drafts, edit menu items, upload assets, and publish approved menu documents. Never prefix it with VITE_.
+- ADMIN_PASSWORD_HASH: output of npm run admin:hash; keep the generated manager password in the password manager and put only the scrypt hash in Vercel.
+- ADMIN_SESSION_SECRET: at least 32 random bytes, generated with a password manager or a secure random generator. This signs stateless HttpOnly sessions and is not the Sanity token.
+- PUBLIC_ORIGIN: the exact deployed HTTPS origin, such as https://cafe-in-eight.vercel.app.
 
-- `R2_ACCOUNT_ID`: the Cloudflare account ID.
-- `R2_BUCKET`: the R2 bucket name.
-- `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`: an R2 API token scoped to the bucket with object read, write, and delete permissions. These values stay on the server.
-- `R2_PUBLIC_URL`: the HTTPS public base URL mapped to this bucket, such as an R2 custom domain. Do not include a trailing object path, query string, or credentials.
+Public project configuration defaults to project kgt3bhzl, dataset production, and can be explicitly set with SANITY_PROJECT_ID and SANITY_DATASET. These IDs are not credentials.
 
-The admin upload form accepts JPEG and PNG images up to 5 MB and 40 megapixels. The server checks the file signature and dimensions, generates UUID object keys, and rejects unconfigured storage rather than reporting a false success. Server-side uploads do not require browser-to-bucket CORS rules. Replaced or removed images are deleted after the menu update succeeds and only when no item still references them; cleanup is best-effort if R2 is temporarily unavailable. Older menu backups that omit an image field retain the current photo for matching item IDs.
+The function fails closed for manager login if the password hash, session secret, or Sanity write token is absent. No credentials are committed or changed by this code task. After setting secrets, verify manager login on a Vercel Preview deployment before Production.
 
-R2 credentials and a public domain are not configured in this workspace. Until those server values exist, the upload route returns a clear `503` configuration error; no persistent photo upload has been verified against a live bucket.
+## Manager workflow and authorization
 
-The session cookie is HttpOnly and SameSite=Strict. Sessions expire after 30 minutes idle or 8 hours absolute and are revoked on sign-out or server restart. Failed logins are rate limited per connecting IP. The API uses CSRF tokens, origin checks, server-side authorization, validated JSON, atomic file replacement and revision checks.
+The current portal has one manager password and no separate role matrix. The Vercel API verifies the existing scrypt password server-side, issues a signed session cookie (HttpOnly, SameSite=Strict, Secure in production), checks a manager role claim, verifies same-origin mutations, and requires a CSRF token. Manager sessions have a fixed 30-minute maximum lifetime. Because Vercel instances are stateless, a copied signed cookie cannot be revoked individually; rotate ADMIN_SESSION_SECRET to invalidate all sessions. The Sanity write token is only read by the server function.
 
-## Deployment limits
+Saving or importing menu changes writes Sanity drafts; it does not publish. The Publish approved menu button is a separate explicit action. It publishes draft categories before eligible menu items so weak references can strengthen on publish. The example item remains a draft for owner review. Signature Specials stay under the existing authenticated Sanity Studio authoring and publish controls; they are not published by the Manager Portal menu action.
 
-This no-dependency store is designed for one Node server process with a persistent writable disk. All devices using that server share its current menu. Do not run multiple server replicas against separate disks or place this JSON store on an ephemeral filesystem. For horizontal scaling, managed hosting, or a higher availability requirement, configure a shared transactional database and shared session/rate-limit storage before production use. HTTPS termination, backups, monitoring, and secret-manager configuration are supplied by deployment infrastructure and have not been configured or verified here.
+Vercel function instances are stateless. The endpoint includes per-instance failed-login throttling as a defense in depth. Configure and verify a Vercel Firewall/WAF rate-limit rule for /api/admin/login before production rollout because an in-memory limiter cannot provide a global limit across instances. The project dashboard configuration is not accessible from this workspace.
 
-The previous manager kept edits only in each browser's local storage, which cannot be treated as server truth automatically. After sign-in, the manager offers **Review saved browser edits** when it finds those old overrides. It validates and previews the merged full menu, and only removes the old browser copy after an authenticated manager confirms a successful import. If browser storage is unavailable or contains invalid values, export or record the changes and enter them through the manager instead.
+Menu photo uploads are sent to the function and stored as Sanity image assets. Uploads are limited to 4 MB to stay below the Vercel 4.5 MB function request limit, and JPEG/PNG signatures and image dimensions are checked server-side. Replacing/removing an image does not delete a Sanity asset; this avoids deleting assets still referenced elsewhere, but can leave unused assets for later Studio cleanup. Menu-item deletion is blocked in the Vercel manager because Sanity has no menu deletion draft in this workflow; handle removals in Studio after editorial review and explicit approval.
+
+## Local development and rollback
+
+- npm run dev keeps the current Vite middleware backed by the local data/menu-store.json JSON store and exposes the local-only Sanity draft preview.
+- npm start runs the legacy standalone Node/JSON server. Its persistent file store and optional R2 photo adapter remain unchanged as a rollback/local path.
+- The Vercel function is exercised in unit tests with mocked Sanity clients; it has not been deployed or verified against production settings in this task.
+- Vercel automatically exposes files in the project /api directory as Node Functions. vercel.json includes the generated fallback seed file inside that function bundle.
+- Vercel's function request/response payload limit is 4.5 MB. The upload endpoint deliberately accepts less than that limit.

@@ -6,6 +6,7 @@ import {
   discardMenuPhoto,
   loginAdmin,
   logoutAdmin,
+  publishApprovedMenu,
   uploadMenuPhoto,
   useLiveMenu,
   type EnhancedMenuItem,
@@ -23,7 +24,6 @@ interface ItemEditorProps {
   item: EnhancedMenuItem
   categories: MenuCategory[]
   onSave: (item: EnhancedMenuItem) => Promise<void>
-  onDelete: (id: string) => Promise<void>
 }
 
 function PhotoUploadField({
@@ -61,8 +61,8 @@ function PhotoUploadField({
       setUploadError('Choose a JPEG or PNG image.')
       return
     }
-    if (file.size > 5 * 1024 * 1024) {
-      setUploadError('Choose an image smaller than 5 MB.')
+    if (file.size > 4 * 1024 * 1024) {
+      setUploadError('Choose an image smaller than 4 MB for secure serverless upload.')
       return
     }
     if (localPreview) URL.revokeObjectURL(localPreview)
@@ -146,7 +146,7 @@ function PhotoUploadField({
   )
 }
 
-function ItemEditor({ item, categories, onSave, onDelete }: ItemEditorProps) {
+function ItemEditor({ item, categories, onSave }: ItemEditorProps) {
   const [draft, setDraft] = useState(item)
   const [busy, setBusy] = useState(false)
   const [photoBusy, setPhotoBusy] = useState(false)
@@ -199,12 +199,8 @@ function ItemEditor({ item, categories, onSave, onDelete }: ItemEditorProps) {
         <button type="button" disabled={busy || photoBusy} onClick={async () => { setBusy(true); try { await onSave(draft) } catch { /* Parent displays the request error. */ } finally { setBusy(false) } }} className="btn btn-primary ml-auto min-h-9 px-3 text-[10px] disabled:opacity-50">
           {photoBusy ? 'Uploading photo…' : busy ? 'Saving…' : 'Save changes'}
         </button>
-        <button type="button" disabled={busy} onClick={async () => {
-          if (!window.confirm(`Delete ${item.name} from the menu? This cannot be undone.`)) return
-          setBusy(true)
-          try { await onDelete(item.id) } catch { /* Parent displays the request error. */ } finally { setBusy(false) }
-        }} className="min-h-9 rounded-lg border border-red-300/20 px-3 text-[10px] text-red-200/80 hover:border-red-300/50 hover:text-red-100 disabled:opacity-50">
-          Delete
+        <button type="button" disabled title="Use Sanity Studio after editorial review. Deletion is not available in this draft-only manager." className="min-h-9 rounded-lg border border-ivory/10 px-3 text-[10px] text-ivory/40 disabled:opacity-60">
+          Delete in Studio
         </button>
       </div>
     </article>
@@ -212,7 +208,7 @@ function ItemEditor({ item, categories, onSave, onDelete }: ItemEditorProps) {
 }
 
 export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
-  const { items, categories, loading, error, refresh, saveItem, deleteItem, exportMenu, previewImport, applyImport } = useLiveMenu({ forceLegacy: true })
+  const { items, categories, loading, error, refresh, saveItem, exportMenu, previewImport, applyImport } = useLiveMenu({ forceLegacy: true })
   const [password, setPassword] = useState('')
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
@@ -314,19 +310,7 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
     try {
       await saveItem(item.image ? { ...item, image: { ...item.image, alt: item.name } } : item)
       setErrorMsg('')
-      setSuccessMsg(`${item.name} saved.`)
-    } catch (cause) {
-      reportError(cause)
-      if (cause instanceof Error && cause.message.includes('changed in another session')) await refresh()
-    }
-  }
-
-  const handleDelete = async (id: string) => {
-    const item = items.find((entry) => entry.id === id)
-    try {
-      await deleteItem(id)
-      setErrorMsg('')
-      setSuccessMsg(`${item?.name || 'Menu item'} deleted.`)
+      setSuccessMsg(`${item.name} saved as an unpublished draft.`)
     } catch (cause) {
       reportError(cause)
       if (cause instanceof Error && cause.message.includes('changed in another session')) await refresh()
@@ -350,7 +334,7 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
       setNewDescription('')
       setNewImage(undefined)
       setErrorMsg('')
-      setSuccessMsg(`${name} added to the menu.`)
+      setSuccessMsg(`${name} added as an unpublished draft.`)
     } catch (cause) {
       reportError(cause)
     }
@@ -404,7 +388,7 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
 
   const handleImport = async () => {
     if (!pendingBackup || !pendingPreview) return
-    const summary = `${pendingLegacy ? 'Apply the saved browser edits?' : 'Apply this backup?'}\n\nAdd: ${pendingPreview.added.length}\nUpdate: ${pendingPreview.updated.length}\nRemove: ${pendingPreview.removed.length}\n\nThis replaces the complete current menu.`
+    const summary = `${pendingLegacy ? 'Stage the saved browser edits?' : 'Stage this backup?'}\n\nAdd: ${pendingPreview.added.length}\nUpdate: ${pendingPreview.updated.length}\nRemove: ${pendingPreview.removed.length}\n\nChanges will be saved as Sanity drafts and will not be published.`
     if (!window.confirm(summary)) return
     setBusy(true)
     try {
@@ -417,7 +401,7 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
       setPendingPreview(null)
       setPendingLegacy(false)
       setErrorMsg('')
-      setSuccessMsg(`Menu backup applied. ${snapshot.items.length} items are now live.`)
+      setSuccessMsg(`Menu backup saved as drafts. ${snapshot.items.length} items are available for review.`)
     } catch (cause) {
       reportError(cause)
       if (cause instanceof Error && cause.message.includes('changed in another session')) await refresh()
@@ -433,15 +417,26 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
     } catch (cause) { reportError(cause) }
   }
 
+  const handlePublish = async () => {
+    if (!window.confirm('Publish the reviewed menu categories and items to the public website? The item named “example” will remain unpublished for owner review.')) return
+    setBusy(true)
+    try {
+      const result = await publishApprovedMenu()
+      await refresh()
+      setErrorMsg('')
+      setSuccessMsg(`Published ${result.publishedCategories} categories and ${result.publishedItems} menu items. ${result.heldForReview.length ? 'The example item remains a draft for owner review.' : ''}`)
+    } catch (cause) { reportError(cause) } finally { setBusy(false) }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-3 sm:p-6" role="presentation">
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="manager-title" className="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-bronze/35 bg-espresso-2 p-4 text-ivory shadow-2xl sm:p-6">
         <div className="flex items-start justify-between gap-3 border-b border-ivory/10 pb-4">
           <div>
             <h3 id="manager-title" className="font-display text-lg text-ivory">Cafe In Manager Portal</h3>
-            <p className="mt-1 text-[11px] text-bronze/80">Manage the live In-Café menu</p>
+            <p className="mt-1 text-[11px] text-bronze/80">Manage Sanity menu drafts</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close manager portal" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ivory/10 text-ivory/70 transition-colors hover:bg-ivory/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze">×</button>
+          <button type="button" onClick={onClose} aria-label="Close manager portal" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ivory/10 text-ivory/70 transition-colors hover:bg-ivory/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze">Ã—</button>
         </div>
 
         {!isAuthenticated ? (
@@ -458,8 +453,9 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
         ) : (
           <div className="flex min-h-0 flex-1 flex-col pt-3">
             <div className="flex flex-wrap items-center justify-between gap-2 pb-3">
-              <p className="text-[11px] text-ivory/55">Changes publish to the public menu after saving.</p>
+              <p className="text-[11px] text-ivory/55">Saving creates an unpublished draft. Publish only after approval.</p>
               <div className="flex flex-wrap items-center gap-2">
+                <button type="button" disabled={busy || loading} onClick={() => void handlePublish()} className="min-h-9 rounded-lg border border-bronze/45 bg-bronze/10 px-3 text-[10px] font-semibold text-bronze hover:bg-bronze/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze disabled:opacity-50">Publish approved menu</button>
                 {legacyAvailable && <button type="button" onClick={() => void handleLegacyPreview()} className="min-h-9 rounded-lg border border-bronze/30 px-3 text-[10px] text-bronze hover:border-bronze/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze">Review saved browser edits</button>}
                 <button type="button" onClick={() => void handleLogout()} className="min-h-9 rounded-lg border border-ivory/15 px-3 text-[10px] text-ivory/70 hover:border-ivory/30 hover:text-ivory focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze">Sign out</button>
               </div>
@@ -485,13 +481,14 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
             </div>
 
             <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto pr-1">
-              {loading ? <p className="py-6 text-center text-xs text-ivory/55">Loading the current menu…</p> : filteredItems.length ? filteredItems.map((item) => <ItemEditor key={JSON.stringify(item)} item={item} categories={categories} onSave={handleSave} onDelete={handleDelete} />) : <p className="py-6 text-center text-xs text-ivory/55">No menu items match this search.</p>}
+              {loading ? <p className="py-6 text-center text-xs text-ivory/55">Loading the current menu…</p> : filteredItems.length ? filteredItems.map((item) => <ItemEditor key={JSON.stringify(item)} item={item} categories={categories} onSave={handleSave} />) : <p className="py-6 text-center text-xs text-ivory/55">No menu items match this search.</p>}
             </div>
 
             {pendingPreview && (
               <div className="mt-3 rounded-xl border border-bronze/30 bg-bronze/10 p-3 text-xs">
                 <p className="font-semibold text-ivory">Backup preview · {pendingPreview.itemCount} items</p>
                 <p className="mt-1 text-ivory/65">Add {pendingPreview.added.length} · Update {pendingPreview.updated.length} · Remove {pendingPreview.removed.length}</p>
+                {pendingPreview.removed.length > 0 && <p role="alert" className="mt-2 text-[10px] leading-relaxed text-amber-200">This backup removes existing items. The Vercel draft workflow cannot safely represent staged deletions, so this import is blocked without changing content.</p>}
                 <div className="mt-2 grid gap-1 text-[10px] leading-relaxed text-ivory/65 sm:grid-cols-3">
                   {([
                     ['Adding', pendingPreview.added, pendingBackup?.items ?? []],
@@ -504,7 +501,7 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
                     </p>
                   ))}
                 </div>
-                <button type="button" disabled={busy} onClick={() => void handleImport()} className="mt-2 min-h-10 rounded-lg bg-bronze px-3 text-[10px] font-semibold text-espresso disabled:opacity-50">{busy ? 'Applying…' : 'Review and apply backup'}</button>
+                <button type="button" disabled={busy || pendingPreview.removed.length > 0} onClick={() => void handleImport()} className="mt-2 min-h-10 rounded-lg bg-bronze px-3 text-[10px] font-semibold text-espresso disabled:opacity-50">{busy ? 'Saving drafts…' : 'Stage backup as drafts'}</button>
                 <button type="button" onClick={() => { setPendingBackup(null); setPendingPreview(null); setPendingLegacy(false) }} className="ml-2 min-h-10 px-3 text-[10px] text-ivory/65">Cancel</button>
               </div>
             )}

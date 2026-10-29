@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/**/*.mjs": {
+      "includeFiles": "dist/menu-seed.json"
+    }
+  },
+  "rewrites": [
+    { "source": "/menu", "destination": "/" },
+    { "source": "/menu/:path*", "destination": "/" },
+    { "source": "/digital-menu", "destination": "/" },
+    { "source": "/digital-menu/:path*", "destination": "/" }
+  ]
+}

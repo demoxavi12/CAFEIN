@@ -11,14 +11,16 @@ npm run build      # type-check + production build into dist/
 npm run preview    # serve the production build
 npm run lint
 npm test
-npm start          # production Node server and existing JSON API
+npm start          # legacy local Node server and JSON API (rollback path)
 ```
 
 ## Sanity Studio and content
 
 The standalone Studio lives in `studio/`, configured for project `kgt3bhzl` and dataset `production`. From `studio/`, run `npm install`, `npm run dev`, `npm run check`, `npm run build`, and `npm run test:migration-source`. Authenticate with `npx sanity login` in the Studio directory. Editors manage menu categories, menu items, images, stock/badges, and Signature Specials through Studio; only published content is read by the public frontend. No write token belongs in the React app.
 
-The frontend's public Sanity client is configured in `src/digital-menu/sanityContent.ts`. It uses anonymous published reads. When no published Sanity menu exists or reads are temporarily unavailable, current data is served by the existing `/api/menu` fallback. The legacy Manager Portal and JSON API remain available until content parity and the owner editing workflow are verified; do not remove them based only on a local build.
+The frontend's public Sanity client is configured in `src/digital-menu/sanityContent.ts` and uses anonymous published reads. Vercel serves the same-origin `/api/*` routes from `api/[...path].mjs`; `/api/menu` reads the published Sanity perspective and falls back to the tracked seed when no valid published menu is available. The Vercel Manager Portal stores edits as Sanity drafts and publishes only after an explicit manager confirmation. The standalone Node/JSON and R2 adapters remain as a local rollback path; they are not required by the Vercel deployment.
+
+Vercel Function secrets are documented in [the manager portal setup guide](docs/manager-portal-setup.md). Never expose `SANITY_API_TOKEN`, `ADMIN_PASSWORD_HASH`, or `ADMIN_SESSION_SECRET` through a `VITE_` variable or browser code. The local draft-preview endpoint remains a Vite development middleware and is not implemented by the production API function.
 
 ### Safe migration workflow
 
@@ -32,9 +34,9 @@ No Sanity token is required in frontend environment variables. `studio/` uses th
 
 ### Hosting and recovery notes
 
-- The project includes a standalone Node server (`server/index.mjs`) and Vite development API middleware. There is no Vercel Functions adapter in the repository yet. If deploying the legacy API to Vercel before its retirement, add and test an explicit serverless adapter or host the Node server separately; do not assume static Vite hosting serves `/api/*`.
+- The project includes a standalone Node server (`server/index.mjs`), Vite development middleware, and Vercel Functions under `api/`. Vercel uses the serverless Sanity implementation; local Node/JSON and R2 storage remain available as a recovery path.
 - The production dataset must allow anonymous read access for the public website. Studio writes require an authorized project member. Keep editing roles restricted to trusted owners/editors.
-- If Sanity content is unavailable before cutover, the existing JSON API remains the fallback. The timestamped backup can restore the complete legacy menu and special metadata; retain it locally until Sanity parity is confirmed.
+- If Sanity has no complete published menu or is temporarily unavailable, `/api/menu` serves the build-time tracked menu seed. The timestamped JSON backup remains available for a controlled recovery of legacy data and special metadata; retain it locally until Sanity parity is confirmed.
 
 The intro plays once per browser session. To see it again, open a new tab or clear `sessionStorage`. Links straight to a section (e.g. `/#menu`) skip the intro.
 

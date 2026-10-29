@@ -6,6 +6,7 @@ import { fetchLocalDraftPreview } from './sanityPreview'
 export interface EnhancedMenuItem extends MenuItem {
   isSoldOut: boolean
   badge?: string
+  order?: number
 }
 
 export interface MenuSnapshot {
@@ -89,6 +90,13 @@ export async function discardMenuPhoto(src: string) {
   return adminRequest<{ deleted: boolean }>('/api/admin/images', {
     method: 'DELETE',
     body: JSON.stringify({ src }),
+  })
+}
+
+export async function publishApprovedMenu() {
+  return adminRequest<{ publishedCategories: number; publishedItems: number; heldForReview: string[] }>('/api/admin/publish', {
+    method: 'POST',
+    body: JSON.stringify({ scope: 'menu', confirm: true }),
   })
 }
 

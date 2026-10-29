@@ -8,6 +8,8 @@ export interface ImageAsset {
   alt: string
   width: number
   height: number
+  /** Sanity asset document ID for server-side draft editing. */
+  assetId?: string
   /** CSS object-position used when the image is cropped by its frame */
   focus?: string
 }

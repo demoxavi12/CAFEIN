@@ -11,13 +11,15 @@ import { DigitalMenuAdminModal } from './DigitalMenuAdminModal'
 import { TableOrderTrayModal } from './TableOrderTrayModal'
 import { OrderTrayFloatingBar } from './OrderTrayFloatingBar'
 import { CafeAtmosphereModal } from './CafeAtmosphereModal'
+import { isLocalDraftPreviewRequested } from './sanityPreview'
 
 interface Props {
   onExitMenu: () => void
 }
 
 export function DigitalMenuView({ onExitMenu }: Props) {
-  const { items, loading: menuLoading, error: menuError, dataSource } = useLiveMenu()
+  const draftPreview = isLocalDraftPreviewRequested()
+  const { items, loading: menuLoading, error: menuError, dataSource, previewError, previewSummary } = useLiveMenu({ draftPreview })
   const { tray, addItem, removeItem, clearTray } = useCustomerTray()
 
   // Initialize state directly from URL search params without cascading effects
@@ -54,6 +56,18 @@ export function DigitalMenuView({ onExitMenu }: Props) {
         tableNumber={tableNumber}
         setTableNumber={setTableNumber}
       />
+
+      {draftPreview && (
+        <div role={previewError ? 'alert' : 'status'} className="mx-auto mt-3 w-full max-w-5xl px-3 sm:px-6">
+          <div className={`rounded-xl border px-4 py-3 text-sm ${previewError ? 'border-amber-300/40 bg-amber-950/50 text-amber-100' : 'border-bronze/30 bg-espresso-2 text-ivory-2'}`}>
+            {previewError
+              ? `Local Sanity draft preview unavailable: ${previewError} Showing the existing published or JSON/API fallback.`
+              : dataSource === 'sanity-preview' && previewSummary
+                ? `Local draft preview · ${previewSummary.categoryCount} categories · ${previewSummary.menuItemCount} menu items · ${previewSummary.realSpecialReferences} real specials · ${previewSummary.temporarySpecialEntries} temporary entries · ${previewSummary.imageAssetCount} images · ${previewSummary.publishedDocumentCount} published documents.`
+                : 'Loading authenticated Sanity drafts for local preview…'}
+          </div>
+        </div>
+      )}
 
       {/* Atmosphere Reel Teaser Banner */}
       <div className="w-full max-w-5xl mx-auto px-3 pt-3 sm:px-6">

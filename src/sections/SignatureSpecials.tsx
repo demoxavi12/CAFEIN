@@ -10,6 +10,7 @@ import { EmberBackground } from '../components/EmberBackground'
 import { EASE_OUT } from '../lib/motion'
 import { useEffect, useRef, useState, type PointerEvent, type TouchEvent } from 'react'
 import type { PublishedSpecials } from '../digital-menu/sanityContent'
+import { fetchLocalDraftPreview, isLocalDraftPreviewRequested, type LocalDraftPreview } from '../digital-menu/sanityPreview'
 
 interface Props {
   onSelect: (item: MenuItem) => void
@@ -127,10 +128,24 @@ function Arrow({ dir }: { dir: 'prev' | 'next' }) {
 }
 
 export function SignatureSpecials({ onSelect }: Props) {
-  const { items: liveMenuItems } = useLiveMenu()
+  const draftPreview = isLocalDraftPreviewRequested()
+  const { items: liveMenuItems, dataSource, previewError, previewSummary } = useLiveMenu({ draftPreview })
   const [publishedSpecials, setPublishedSpecials] = useState<PublishedSpecials | null>(null)
+  const [draftSpecials, setDraftSpecials] = useState<LocalDraftPreview['specials'] | null>(null)
   useEffect(() => {
     let active = true
+    if (draftPreview) {
+      const refreshDrafts = () => {
+        void fetchLocalDraftPreview().then((result) => {
+          if (active) setDraftSpecials((current) => JSON.stringify(current) === JSON.stringify(result.specials) ? current : result.specials)
+        }).catch(() => {
+          // The menu hook displays the preview error and keeps the existing published/JSON fallback available.
+        })
+      }
+      refreshDrafts()
+      const draftTimer = window.setInterval(refreshDrafts, 30_000)
+      return () => { active = false; window.clearInterval(draftTimer) }
+    }
     const refresh = () => {
       void import('../digital-menu/sanityContent').then(({ fetchPublishedSpecials }) => fetchPublishedSpecials()).then((result) => {
         if (active && result) setPublishedSpecials((current) => JSON.stringify(current) === JSON.stringify(result) ? current : result)
@@ -141,9 +156,9 @@ export function SignatureSpecials({ onSelect }: Props) {
     refresh()
     const timer = window.setInterval(refresh, 30_000)
     return () => { active = false; window.clearInterval(timer) }
-  }, [])
+  }, [draftPreview])
   const featuredItems = [
-    ...(publishedSpecials?.items ?? [
+    ...(draftSpecials?.items ?? publishedSpecials?.items ?? [
       ...specials.ids.map((id) => liveMenuItems.find((item) => item.id === id)).filter((item): item is NonNullable<typeof item> => Boolean(item)),
       ...temporaryItems,
     ]),
@@ -229,6 +244,15 @@ export function SignatureSpecials({ onSelect }: Props) {
       <EmberBackground strength="warm" />
       <div className="container-x relative z-10">
         <SectionHeading id="specials-title" eyebrow={publishedSpecials?.eyebrow ?? specials.eyebrow} title={publishedSpecials?.title ?? specials.title} italic="at Cafe In." />
+        {draftPreview && (
+          <p role={previewError ? 'alert' : 'status'} className={`mt-4 text-sm ${previewError ? 'text-amber-200' : 'text-ivory-2/75'}`}>
+            {previewError
+              ? `Local Sanity draft preview unavailable: ${previewError}`
+              : dataSource === 'sanity-preview' && previewSummary
+                ? `Local draft preview · ${previewSummary.realSpecialReferences} menu references · ${previewSummary.temporarySpecialEntries} temporary entries · ${previewSummary.imageAssetCount} images`
+                : 'Loading authenticated Sanity drafts for local preview…'}
+          </p>
+        )}
       </div>
 
       <div role="region" aria-roledescription="carousel" aria-label="Signature specials" className="relative z-10 mx-auto mt-12 w-full max-w-[1200px] sm:mt-16 lg:mt-12">

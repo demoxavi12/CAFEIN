@@ -17,6 +17,7 @@
     "migration:dry-run": "node scripts/migrate-content.mjs",
     "migration:preflight": "sanity exec scripts/preflight.mjs --with-user-token",
     "check:auth": "sanity exec scripts/check-auth.mjs --with-user-token",
+    "preview:drafts": "sanity exec scripts/preview-drafts.mjs --with-user-token",
     "verify:migration": "sanity exec scripts/verify-migration.mjs --with-user-token",
     "migration:apply-drafts": "sanity exec scripts/apply-drafts.mjs --with-user-token"
   },

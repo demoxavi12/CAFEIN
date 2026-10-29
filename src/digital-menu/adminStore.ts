@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ImageAsset } from '../data/images'
 import type { MenuCategory, MenuItem } from '../data/menu'
+import { fetchLocalDraftPreview } from './sanityPreview'
 
 export interface EnhancedMenuItem extends MenuItem {
   isSoldOut: boolean
@@ -121,22 +122,25 @@ export async function checkAdminSession() {
   return snapshot
 }
 
-export function useLiveMenu(options: { forceLegacy?: boolean } = {}) {
+export function useLiveMenu(options: { forceLegacy?: boolean; draftPreview?: boolean } = {}) {
   const [items, setItems] = useState<EnhancedMenuItem[]>([])
   const [categories, setCategories] = useState<MenuCategory[]>([])
   const [revision, setRevision] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [dataSource, setDataSource] = useState<'sanity' | 'legacy'>('legacy')
-  const dataSourceRef = useRef<'sanity' | 'legacy'>('legacy')
+  const [dataSource, setDataSource] = useState<'sanity' | 'sanity-preview' | 'legacy'>('legacy')
+  const [previewError, setPreviewError] = useState('')
+  const [previewSummary, setPreviewSummary] = useState<{ categoryCount: number; menuItemCount: number; realSpecialReferences: number; temporarySpecialEntries: number; imageAssetCount: number; publishedDocumentCount: number } | null>(null)
+  const dataSourceRef = useRef<'sanity' | 'sanity-preview' | 'legacy'>('legacy')
   const revisionRef = useRef(0)
   const hasSnapshotRef = useRef(false)
   const refreshSequenceRef = useRef(0)
 
-  const acceptSnapshot = useCallback((snapshot: MenuSnapshot, source: 'sanity' | 'legacy' = 'legacy') => {
+  const acceptSnapshot = useCallback((snapshot: MenuSnapshot, source: 'sanity' | 'sanity-preview' | 'legacy' = 'legacy') => {
+    const sameSource = dataSourceRef.current === source
     dataSourceRef.current = source
     setDataSource(source)
-    if (hasSnapshotRef.current && revisionRef.current === snapshot.revision) {
+    if (hasSnapshotRef.current && sameSource && revisionRef.current === snapshot.revision) {
       setError('')
       setLoading(false)
       return
@@ -147,11 +151,25 @@ export function useLiveMenu(options: { forceLegacy?: boolean } = {}) {
     revisionRef.current = snapshot.revision
     hasSnapshotRef.current = true
     setError('')
+    if (source === 'sanity-preview') setPreviewError('')
     setLoading(false)
   }, [])
 
   const refresh = useCallback(async (): Promise<MenuSnapshot | null> => {
     const requestSequence = ++refreshSequenceRef.current
+    try {
+      if (options.draftPreview && !options.forceLegacy) {
+        const preview = await fetchLocalDraftPreview()
+        if (requestSequence !== refreshSequenceRef.current) return null
+        setPreviewSummary(preview.summary)
+        setPreviewError('')
+        acceptSnapshot(preview.menu, 'sanity-preview')
+        return preview.menu
+      }
+    } catch (cause) {
+      setPreviewError(cause instanceof Error ? cause.message : 'Sanity draft preview is unavailable.')
+      // Preview failures continue through the existing published Sanity and JSON/API fallback.
+    }
     try {
       if (!options.forceLegacy) {
         const { fetchPublishedMenu } = await import('./sanityContent')
@@ -176,7 +194,7 @@ export function useLiveMenu(options: { forceLegacy?: boolean } = {}) {
       setLoading(false)
       return null
     }
-  }, [acceptSnapshot, options.forceLegacy])
+  }, [acceptSnapshot, options.draftPreview, options.forceLegacy])
 
   useEffect(() => {
     const refreshTimer = window.setTimeout(() => { void refresh() }, 0)
@@ -247,5 +265,5 @@ export function useLiveMenu(options: { forceLegacy?: boolean } = {}) {
     return snapshot
   }, [saveSnapshot])
 
-  return { items, categories, revision, loading, error, dataSource, refresh, saveItem, deleteItem, exportMenu, previewImport, applyImport }
+  return { items, categories, revision, loading, error, dataSource, previewError, previewSummary, refresh, saveItem, deleteItem, exportMenu, previewImport, applyImport }
 }

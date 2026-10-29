@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
 import { createApiHandler } from './server/api.mjs'
 import { loadSeedMenu } from './server/seed.mjs'
+import { createSanityDraftPreviewHandler } from './server/sanity-preview.mjs'
 
 function menuApi() {
   return {
@@ -18,6 +19,15 @@ function menuApi() {
   }
 }
 
+function localSanityDraftPreview() {
+  return {
+    name: 'cafe-in-local-sanity-draft-preview',
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use(createSanityDraftPreviewHandler())
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), menuApi()],
+  plugins: [react(), tailwindcss(), localSanityDraftPreview(), menuApi()],
 })

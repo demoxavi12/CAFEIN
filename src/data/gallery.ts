@@ -38,7 +38,7 @@ export const gallery: GalleryItem[] = [
   { image: images.diningAtmosphere, caption: 'Friends around the table', span: 'wide' },
   {
     image: {
-      src: '/images/IMG_20260809_215809.jpg.jpeg',
+      src: '/images/optimized/IMG_20260809_215809.webp',
       alt: 'A salad served at a table beside the cafe’s golden Buddha statue',
       width: 1864,
       height: 4096,
@@ -48,7 +48,7 @@ export const gallery: GalleryItem[] = [
   },
   {
     image: {
-      src: '/images/IMG_20260813_192951.jpg.jpeg',
+      src: '/images/optimized/IMG_20260813_192951.webp',
       alt: 'A dark layered iced drink on a wooden table with soft floral details behind it',
       width: 1864,
       height: 4096,
@@ -58,7 +58,7 @@ export const gallery: GalleryItem[] = [
   },
   {
     image: {
-      src: '/images/IMG_20260905_202926.jpg.jpeg',
+      src: '/images/optimized/IMG_20260905_202926.webp',
       alt: 'A frothy orange drink served in a handled glass mug',
       width: 1864,
       height: 4096,
@@ -68,7 +68,7 @@ export const gallery: GalleryItem[] = [
   },
   {
     image: {
-      src: '/images/IMG_20260906_205200.jpg.jpeg',
+      src: '/images/optimized/IMG_20260906_205200.webp',
       alt: 'A pale green and pink iced drink on a wooden table',
       width: 1864,
       height: 4096,
@@ -78,7 +78,7 @@ export const gallery: GalleryItem[] = [
   },
   {
     image: {
-      src: '/images/IMG_20260928_194712.jpg.jpeg',
+      src: '/images/optimized/IMG_20260928_194712.webp',
       alt: 'A chilled layered drink with a softly lit cafe interior behind it',
       width: 1864,
       height: 4096,

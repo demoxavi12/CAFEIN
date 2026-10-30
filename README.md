@@ -38,7 +38,7 @@ No Sanity token is required in frontend environment variables. `studio/` uses th
 - The production dataset must allow anonymous read access for the public website. Studio writes require an authorized project member. Keep editing roles restricted to trusted owners/editors.
 - If Sanity has no complete published menu or is temporarily unavailable, `/api/menu` serves the build-time tracked menu seed. The timestamped JSON backup remains available for a controlled recovery of legacy data and special metadata; retain it locally until Sanity parity is confirmed.
 
-The intro plays once per browser session. To see it again, open a new tab or clear `sessionStorage`. Links straight to a section (e.g. `/#menu`) skip the intro.
+The homepage intro plays on each full page load; use **Skip Intro** to dismiss it. Standalone menu routes do not show the homepage intro, and returning from a menu route in-page reveals the completed homepage without replaying it.
 
 ## Other source files
 

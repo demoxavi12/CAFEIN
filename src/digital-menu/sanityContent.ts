@@ -1,5 +1,5 @@
 import { createClient } from '@sanity/client'
-import imageUrlBuilder from '@sanity/image-url'
+import { createImageUrlBuilder } from '@sanity/image-url'
 import type { ImageAsset } from '../data/images'
 import type { MenuCategory, MenuItem, CategoryId } from '../data/menu'
 import { categories as fallbackCategories, menuItems as fallbackItems } from '../data/menu'
@@ -13,7 +13,7 @@ const client = createClient({
   perspective: 'published',
   useCdn: true,
 })
-const imageBuilder = imageUrlBuilder(client)
+const imageBuilder = createImageUrlBuilder(client)
 
 interface SanityImage {
   asset?: { _ref?: string }

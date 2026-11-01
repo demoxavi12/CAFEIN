@@ -10,7 +10,7 @@ const scrypt = promisify(scryptCallback)
 const COOKIE = 'cafein_admin_session'
 const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const SCRYPT_OPTIONS = { N: 1 << 17, r: 8, p: 1, maxmem: 256 * 1024 * 1024 }
-const itemQuery = '*[_type == "menuItem"] | order(order asc){_id,_rev,_updatedAt,id,name,price,"categoryId":category->id,section,description,"image":image{asset,alt,objectPosition,"width":asset->metadata.dimensions.width,"height":asset->metadata.dimensions.height},needsConfirmation,isSoldOut,badge,order}'
+const itemQuery = '*[_type == "menuItem"] | order(order asc){_id,_rev,_updatedAt,id,name,price,"categoryId":category->id,section,description,"image":image{asset,alt,objectPosition,"width":asset->metadata.dimensions.width,"height":asset->metadata.dimensions.height},needsConfirmation,isSoldOut,isArchived,badge,order}'
 const categoryQuery = '*[_type == "menuCategory"] | order(order asc){_id,_rev,_updatedAt,id,"label":name,short,blurb,order}'
 
 function inspectSanityImage(buffer, contentType) {
@@ -146,7 +146,7 @@ function mapItem(item, builder) {
     ...(item.description ? { description: item.description } : {}),
     ...(image ? { image } : {}),
     ...(item.needsConfirmation ? { needsConfirmation: item.needsConfirmation } : {}),
-    isSoldOut: Boolean(item.isSoldOut), ...(item.badge ? { badge: item.badge } : {}), ...(Number.isInteger(item.order) ? { order: item.order } : {}),
+    isSoldOut: Boolean(item.isSoldOut), isArchived: Boolean(item.isArchived), ...(item.badge ? { badge: item.badge } : {}), ...(Number.isInteger(item.order) ? { order: item.order } : {}),
   }
 }
 
@@ -192,7 +192,7 @@ function validateCmsItems(items, categories, currentItems = []) {
   const seen = new Set()
   return items.map((item) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) throw new MenuStoreError('Each menu entry must be an object.')
-    if (Object.keys(item).some((key) => !['id', 'name', 'price', 'category', 'section', 'description', 'image', 'needsConfirmation', 'isSoldOut', 'badge', 'order'].includes(key))) throw new MenuStoreError('Menu item contains unsupported fields.')
+    if (Object.keys(item).some((key) => !['id', 'name', 'price', 'category', 'section', 'description', 'image', 'needsConfirmation', 'isSoldOut', 'isArchived', 'badge', 'order'].includes(key))) throw new MenuStoreError('Menu item contains unsupported fields.')
     if (!ID.test(item.id || '') || seen.has(item.id)) throw new MenuStoreError('Each item needs a unique lowercase, hyphenated ID.')
     seen.add(item.id)
     if (typeof item.name !== 'string' || !item.name.trim() || item.name.length > 80) throw new MenuStoreError('Menu item name is invalid.')
@@ -202,6 +202,7 @@ function validateCmsItems(items, categories, currentItems = []) {
     if (item.description !== undefined && (typeof item.description !== 'string' || item.description.length > 500)) throw new MenuStoreError('Menu item description is invalid.')
     if (item.needsConfirmation !== undefined && (typeof item.needsConfirmation !== 'string' || item.needsConfirmation.length > 250)) throw new MenuStoreError('Menu item confirmation note is invalid.')
     if (typeof item.isSoldOut !== 'boolean') throw new MenuStoreError('Menu item availability is invalid.')
+    if (item.isArchived !== undefined && typeof item.isArchived !== 'boolean') throw new MenuStoreError('Menu item archive status is invalid.')
     if (item.badge !== undefined && !['Bestseller', 'Chef Special'].includes(item.badge)) throw new MenuStoreError('Menu item badge is invalid.')
     if (item.order !== undefined && (!Number.isInteger(item.order) || item.order < 0)) throw new MenuStoreError('Menu item ordering is invalid.')
     if (item.image !== undefined) {
@@ -220,6 +221,7 @@ function validateCmsItems(items, categories, currentItems = []) {
       ...(item.image === undefined ? {} : { image: item.image }),
       ...(item.needsConfirmation === undefined ? {} : { needsConfirmation: item.needsConfirmation }),
       isSoldOut: item.isSoldOut,
+      isArchived: item.isArchived ?? currentById.get(item.id)?.isArchived ?? false,
       ...(item.badge ? { badge: item.badge } : {}),
       ...(item.order === undefined ? {} : { order: item.order }),
     }
@@ -236,6 +238,8 @@ function validateCmsBackup(payload, categories, currentItems, canonicalItems) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) throw new MenuStoreError('Backup menu items are invalid.')
     const category = getCategoryForMenuSection(item.section, sectionMappings)
     if (!category) throw new MenuStoreError('A backup item uses an unconfigured Gourmet section.', 400, 'invalid_section')
+    const current = old.get(item.id)
+    if ((current && item.isArchived !== undefined && item.isArchived !== current.isArchived) || (!current && item.isArchived === true)) throw new MenuStoreError('Archive status can only be changed with the reviewed archive or restore action.', 409, 'archive_action_required')
     return { ...item, category }
   })
   const items = validateCmsItems(normalizedItems, categories, currentItems)
@@ -288,28 +292,44 @@ export function createSanityApiHandler({ env = process.env, client = createReadC
         ['/api/admin/publish', ['POST']],
       ])
       const itemRoute = /^\/api\/admin\/menu\/[^/]+$/.test(path)
-      const allowedMethods = methodRules.get(path) || (itemRoute ? ['PUT', 'DELETE'] : null)
+      const archiveRoute = /^\/api\/admin\/menu\/[^/]+\/(?:archive|restore)$/.test(path)
+      const allowedMethods = methodRules.get(path) || (archiveRoute ? ['POST'] : itemRoute ? ['PUT', 'DELETE'] : null)
       if (allowedMethods && !allowedMethods.includes(method)) {
         send(res, 405, { error: 'This HTTP method is not allowed for the endpoint.', code: 'method_not_allowed' }, { Allow: allowedMethods.join(', ') })
         return true
       }
       if (path === '/api/preview/sanity-drafts') throw new MenuStoreError('Not found.', 404, 'not_found')
       if (path === '/api/menu' && method === 'GET') {
+        let archivedIds = new Set()
         try {
+          if (writeClient) {
+            try {
+              archivedIds = new Set((await writeClient.withConfig({ perspective: 'drafts', useCdn: false }).fetch('*[_type == "menuItem" && isArchived == true]{id}')).map((item) => item.id))
+            } catch {
+              throw new MenuStoreError('The active menu status could not be verified.', 503, 'archive_state_unavailable')
+            }
+          }
           const current = await snapshot('published')
-          const publicMenu = current ? { ...current, items: current.items.filter((item) => item.id !== 'example') } : null
+          if (current && !writeClient) throw new MenuStoreError('The active menu status could not be verified.', 503, 'archive_state_unavailable')
+          const publicMenu = current ? { ...current, items: current.items.filter((item) => item.id !== 'example' && !archivedIds.has(item.id)) } : null
           if (publicMenu && seed) {
             const categoryIds = new Set(publicMenu.categories.map((category) => category.id))
             const publishedItemIds = new Set(publicMenu.items.map((item) => item.id))
-            const incomplete = seed.categories.some((category) => !categoryIds.has(category.id)) || seed.items.some((item) => !publishedItemIds.has(item.id))
+            const incomplete = seed.categories.some((category) => !categoryIds.has(category.id)) || seed.items.some((item) => !archivedIds.has(item.id) && !publishedItemIds.has(item.id))
             if (incomplete) throw new MenuStoreError('Sanity menu publication is incomplete; serving the tracked menu fallback.', 503, 'sanity_incomplete')
           }
           const menu = publicMenu || seed
           if (!menu) throw new Error('No published Sanity menu or fallback')
-          send(res, 200, { items: menu.items, categories: menu.categories, revision: current?.revision || 1 })
-        } catch {
+          const activeItems = menu.items.map((item) => {
+            const publicItem = { ...item }
+            delete publicItem.isArchived
+            return publicItem
+          })
+          send(res, 200, { items: activeItems, categories: menu.categories, revision: current?.revision || 1 })
+        } catch (cause) {
+          if (cause?.code === 'archive_state_unavailable') throw cause
           if (!seed) throw new MenuStoreError('The menu is temporarily unavailable.', 503, 'menu_unavailable')
-          send(res, 200, { items: seed.items, categories: seed.categories, revision: 1, source: 'fallback' })
+          send(res, 200, { items: seed.items.filter((item) => item.id !== 'example' && !archivedIds.has(item.id)), categories: seed.categories, revision: 1, source: 'fallback' })
         }
         return true
       }
@@ -372,7 +392,31 @@ export function createSanityApiHandler({ env = process.env, client = createReadC
         }
         if (path === '/api/admin/images' && method === 'DELETE') { send(res, 200, { deleted: false }, headers); return true }
         const itemPath = path.match(/^\/api\/admin\/menu\/([a-z0-9-]+)$/)
+        const archivePath = path.match(/^\/api\/admin\/menu\/([^/]+)\/(archive|restore)$/)
         if (itemPath && method === 'DELETE') throw new MenuStoreError('Item deletion is unavailable in the draft-only Vercel manager. Review and remove it in Sanity Studio; no content was changed.', 409, 'delete_requires_studio')
+        if (archivePath && method === 'POST') {
+          const before = await snapshot('drafts') || { revision: 1, categories: seed?.categories || [], items: seed?.items || [] }
+          let id
+          try { id = decodeURIComponent(archivePath[1]) } catch { throw new MenuStoreError('Item ID is invalid.', 400, 'invalid_item') }
+          if (!ID.test(id)) throw new MenuStoreError('Item ID is invalid.', 400, 'invalid_item')
+          const existing = before.items.find((item) => item.id === id)
+          if (!existing) throw new MenuStoreError('Menu item was not found.', 404, 'item_not_found')
+          const archived = archivePath[2] === 'archive'
+          if (Boolean(existing.isArchived) === archived) {
+            send(res, 200, { item: existing, revision: before.revision, unchanged: true }, headers)
+            return true
+          }
+          const ifMatch = Number(String(req.headers['if-match'] || '').replaceAll('"', ''))
+          if (ifMatch !== before.revision) throw new MenuStoreError('The menu changed in another session. Reload and try again.', 409, 'revision_conflict')
+          const document = documentFromItem({ ...existing, isArchived: archived })
+          const rawClient = admin.withConfig({ perspective: 'raw', useCdn: false })
+          const draft = await rawClient.fetch('*[_id == $draftId][0]{_id,_rev}', { draftId: document._id })
+          if (draft?._rev) await writeItemPatch(admin, document, draft._rev)
+          else await admin.create(document)
+          const after = await snapshot('drafts') || before
+          send(res, 200, { item: after.items.find((item) => item.id === id), revision: after.revision, unchanged: false }, headers)
+          return true
+        }
         if ((path === '/api/admin/menu' && method === 'POST') || (itemPath && method === 'PUT')) {
           const before = await snapshot('drafts') || { revision: 1, categories: seed?.categories || [], items: seed?.items || [] }
           const ifMatch = Number(String(req.headers['if-match'] || '').replaceAll('"', ''))
@@ -382,12 +426,16 @@ export function createSanityApiHandler({ env = process.env, client = createReadC
           const body = await readJson(req)
           savedId = body.id
           if (!ID.test(body.id || '') || (method === 'PUT' && body.id !== id)) throw new MenuStoreError('Item ID is invalid.', 400, 'invalid_item')
+          const existingItem = method === 'PUT' ? before.items.find((entry) => entry.id === id) : null
+          if (method === 'PUT' && !existingItem) throw new MenuStoreError('Menu item was not found.', 404, 'item_not_found')
+          if (method === 'POST' && body.isArchived === true) throw new MenuStoreError('New menu items start active. Use the archive action after creation if needed.', 400, 'invalid_archive_status')
+          if (existingItem && body.isArchived !== undefined && body.isArchived !== existingItem.isArchived) throw new MenuStoreError('Archive status can only be changed with the reviewed archive or restore action.', 409, 'archive_action_required')
           const sectionMappings = getMenuSectionMappings(seed?.items || [], before.categories)
           const category = getCategoryForMenuSection(body.section, sectionMappings)
           if (!category) throw new MenuStoreError('Choose a configured Gourmet section.', 400, 'invalid_section')
           // The section is the manager's choice; the parent category is always
           // derived server-side, regardless of any category value in the request.
-          const normalizedBody = { ...body, category }
+          const normalizedBody = { ...body, category, ...(existingItem ? { isArchived: existingItem.isArchived } : { isArchived: false }) }
           const candidates = method === 'POST' ? [...before.items, normalizedBody] : before.items.map((item) => item.id === id ? { ...normalizedBody, id } : item)
           const validated = validateCmsItems(candidates, before.categories, before.items)
           const item = validated.find((entry) => entry.id === body.id)

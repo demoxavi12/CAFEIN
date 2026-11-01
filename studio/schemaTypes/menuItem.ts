@@ -48,6 +48,13 @@ export const menuItem = defineType({
       validation: (rule) => rule.required(),
     }),
     defineField({
+      name: 'isArchived',
+      title: 'Archived',
+      type: 'boolean',
+      description: 'Archived items stay recoverable in the manager and are hidden from the active customer menu.',
+      initialValue: false,
+    }),
+    defineField({
       name: 'badge',
       title: 'Badge',
       type: 'string',

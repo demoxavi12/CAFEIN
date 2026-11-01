@@ -65,6 +65,7 @@ test('Vercel admin function dispatches a rewritten nested session route', async 
 function fakeClient({ fail = false, categoryDocs = categories, itemDocs = [rawItem] } = {}) {
   const fetch = async (query) => {
     if (fail) throw new Error('Sanity unavailable')
+    if (query.includes('isArchived == true')) return itemDocs.filter((item) => item.isArchived === true).map(({ id }) => ({ id }))
     if (query.includes('_type == \"menuCategory\"')) return categoryDocs
     if (query.includes('_type == \"menuItem\"')) return itemDocs
     if (query.includes('_id in path(\"drafts.*\")')) return query.includes('menuCategory') ? categoryDocs : itemDocs
@@ -316,6 +317,114 @@ test('Vercel manager blocks published item deletion until a reviewed Studio work
   assert.equal(result.status, 409)
   assert.equal(result.body.code, 'delete_requires_studio')
   assert.equal(mutations, 0)
+})
+
+test('archive and restore are authenticated, revision guarded, idempotent draft-only operations', async () => {
+  const secureEnv = { ...env, ADMIN_PASSWORD_HASH: await makePasswordHash('test password') }
+  const itemDocs = [{ ...rawItem }]
+  let creates = 0
+  let patches = 0
+  const client = fakeClient({ itemDocs })
+  const writeClient = fakeClient({ itemDocs })
+  writeClient.create = async (document) => {
+    creates += 1
+    Object.assign(itemDocs[0], { isArchived: document.isArchived, _rev: `item-rev-${creates}` })
+    return document
+  }
+  writeClient.withConfig = (config) => ({
+    fetch: async (query, params = {}) => {
+      if (query.includes('_id == $draftId')) return config.perspective === 'raw' && params.draftId === 'drafts.menuItem-espresso' && creates ? { _id: params.draftId, _rev: itemDocs[0]._rev } : null
+      if (query.includes('menuCategory')) return categories
+      if (query.includes('isArchived == true')) return itemDocs.filter((item) => item.isArchived).map(({ id }) => ({ id }))
+      if (query.includes('menuItem')) return itemDocs
+      return null
+    },
+  })
+  writeClient.patch = (id) => {
+    let changes = {}
+    return {
+      ifRevisionId() { return this },
+      set(value) { changes = value; return this },
+      unset() { return this },
+      async commit() { patches += 1; assert.equal(id, 'drafts.menuItem-espresso'); Object.assign(itemDocs[0], changes, { _rev: `item-rev-patch-${patches}` }); return {} },
+    }
+  }
+  const handler = createSanityApiHandler({ env: secureEnv, client, writeClient, seed: publishedSeed, imageUrlBuilder })
+  const login = await call(handler, '/api/admin/login', { method: 'POST', headers: { origin: secureEnv.PUBLIC_ORIGIN }, body: { password: 'test password' } })
+  const cookie = login.headers['Set-Cookie'].split(';')[0]
+  const session = await call(handler, '/api/admin/session', { headers: { cookie } })
+  const current = await call(handler, '/api/admin/menu', { headers: { cookie } })
+  const headers = { cookie, origin: secureEnv.PUBLIC_ORIGIN, 'x-csrf-token': session.body.csrfToken, 'if-match': `"${current.body.revision}"` }
+
+  assert.equal((await call(handler, '/api/admin/menu/espresso/archive', { method: 'POST' })).status, 401)
+  const stale = await call(handler, '/api/admin/menu/espresso/archive', { method: 'POST', headers: { ...headers, 'if-match': '"0"' } })
+  assert.equal(stale.status, 409)
+  const archived = await call(handler, '/api/admin/menu/espresso/archive', { method: 'POST', headers })
+  assert.equal(archived.status, 200)
+  assert.equal(itemDocs[0].isArchived, true)
+  assert.equal(itemDocs[0].name, rawItem.name)
+  assert.equal(itemDocs[0].price, rawItem.price)
+  assert.equal(creates, 1)
+  const manager = await call(handler, '/api/admin/menu', { headers: { cookie } })
+  assert.equal(manager.body.items[0].isArchived, true)
+  const publicMenu = await call(handler, '/api/menu')
+  assert.deepEqual(publicMenu.body.items, [])
+  const repeated = await call(handler, '/api/admin/menu/espresso/archive', { method: 'POST', headers })
+  assert.equal(repeated.status, 200)
+  assert.equal(repeated.body.unchanged, true)
+  assert.equal(creates, 1)
+  const restored = await call(handler, '/api/admin/menu/espresso/restore', { method: 'POST', headers: { ...headers, 'if-match': `"${manager.body.revision}"` } })
+  assert.equal(restored.status, 200)
+  assert.equal(itemDocs[0].isArchived, false)
+  assert.equal(patches, 1)
+  assert.equal(itemDocs[0].name, rawItem.name)
+})
+
+test('archive routes reject invalid IDs and unsupported methods without mutation', async () => {
+  const secureEnv = { ...env, ADMIN_PASSWORD_HASH: await makePasswordHash('test password') }
+  let writes = 0
+  const writeClient = fakeClient()
+  writeClient.create = async () => { writes += 1 }
+  const handler = createSanityApiHandler({ env: secureEnv, client: fakeClient(), writeClient, seed, imageUrlBuilder })
+  const login = await call(handler, '/api/admin/login', { method: 'POST', headers: { origin: secureEnv.PUBLIC_ORIGIN }, body: { password: 'test password' } })
+  const cookie = login.headers['Set-Cookie'].split(';')[0]
+  const session = await call(handler, '/api/admin/session', { headers: { cookie } })
+  const headers = { cookie, origin: secureEnv.PUBLIC_ORIGIN, 'x-csrf-token': session.body.csrfToken, 'if-match': '"1"' }
+  const missingCsrf = await call(handler, '/api/admin/menu/espresso/archive', { method: 'POST', headers: { cookie, 'if-match': '"1"' } })
+  assert.equal(missingCsrf.status, 403)
+  const invalid = await call(handler, '/api/admin/menu/bad_id/archive', { method: 'POST', headers })
+  assert.equal(invalid.status, 400)
+  assert.equal(invalid.body.code, 'invalid_item')
+  const method = await call(handler, '/api/admin/menu/espresso/archive', { method: 'DELETE', headers })
+  assert.equal(method.status, 405)
+  const current = await call(handler, '/api/admin/menu', { headers: { cookie } })
+  const directToggle = await call(handler, '/api/admin/menu/espresso', { method: 'PUT', headers: { ...headers, 'if-match': `"${current.body.revision}"` }, body: { ...current.body.items[0], isArchived: true } })
+  assert.equal(directToggle.status, 409)
+  assert.equal(directToggle.body.code, 'archive_action_required')
+  assert.equal(writes, 0)
+})
+
+test('public menu fails closed when draft archive state cannot be verified', async () => {
+  const handler = createSanityApiHandler({ env, client: fakeClient(), writeClient: fakeClient({ fail: true }), seed, imageUrlBuilder })
+  const result = await call(handler, '/api/menu')
+  assert.equal(result.status, 503)
+  assert.equal(result.body.code, 'archive_state_unavailable')
+  assert.doesNotMatch(JSON.stringify(result.body), /drafts\.|_rev|Sanity/i)
+})
+
+test('tracked-seed fallback also excludes IDs archived in drafts', async () => {
+  const archiveSeed = { categories: publishedSeed.categories, items: [...publishedSeed.items, { id: 'missing-public-item', name: 'Fallback item', price: 20, category: 'beverages', section: 'Essence of Espresso', isSoldOut: false }] }
+  const handler = createSanityApiHandler({
+    env,
+    client: fakeClient({ itemDocs: [{ ...rawItem, isArchived: false }] }),
+    writeClient: fakeClient({ itemDocs: [{ ...rawItem, isArchived: true }] }),
+    seed: archiveSeed,
+    imageUrlBuilder,
+  })
+  const result = await call(handler, '/api/menu')
+  assert.equal(result.status, 200)
+  assert.equal(result.body.source, 'fallback')
+  assert.equal(result.body.items.some(({ id }) => id === 'espresso'), false)
 })
 
 test('menu item validation rejects unsupported fields before persistence', async () => {

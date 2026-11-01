@@ -15,7 +15,7 @@ import {
   type ImportPreview,
   type MenuBackup,
 } from './adminStore'
-import { clearLegacyAdminPin, clearLegacyMenuOverrides, getLegacyMenuBackup, hasLegacyMenuOverrides } from './legacyMenuMigration.mjs'
+import { clearLegacyAdminPin, hasLegacyMenuOverrides, getLegacyMenuRecovery, buildLegacyRecoveryItems, removeLegacyOverrideRecords, discardMalformedLegacyOverride, type LegacyMenuRecovery, type LegacyRecoveryRecord, type LegacyRecoveryIssue } from './legacyMenuMigration.mjs'
 
 interface Props {
   isOpen: boolean
@@ -27,7 +27,10 @@ interface ItemEditorProps {
   categories: MenuCategory[]
   sections: MenuSectionMapping[]
   conflict: boolean
+  managerBusy: boolean
   onSave: (item: EnhancedMenuItem) => Promise<EnhancedMenuItem>
+  onArchive: (item: EnhancedMenuItem) => Promise<void>
+  onRestore: (item: EnhancedMenuItem) => Promise<void>
 }
 
 function PhotoUploadField({
@@ -150,7 +153,14 @@ function PhotoUploadField({
   )
 }
 
-function ItemEditor({ item, categories, sections, conflict, onSave }: ItemEditorProps) {
+function formatRecoveryValue(record: LegacyRecoveryRecord, value: unknown) {
+  if (record.field === 'soldOut') return value ? 'Sold out' : 'Available'
+  if (record.field === 'badges') return String(value || 'No badge')
+  if (record.field === 'prices') return `₹${String(value)}`
+  return String(value || 'No description')
+}
+
+function ItemEditor({ item, categories, sections, conflict, managerBusy, onSave, onArchive, onRestore }: ItemEditorProps) {
   const [draft, setDraft] = useState(item)
   const [baseItem, setBaseItem] = useState(item)
   const [externalChange, setExternalChange] = useState(false)
@@ -223,11 +233,11 @@ function ItemEditor({ item, categories, sections, conflict, onSave }: ItemEditor
             <option value="Chef Special">Chef Special</option>
           </select>
         </label>
-        <button type="button" disabled={busy || photoBusy || externalChange || conflict || !isDirty || !getCategoryForMenuSection(draft.section, sections)} onClick={async () => { setBusy(true); try { const saved = await onSave(draft); setDraft(saved); setBaseItem(saved); setExternalChange(false) } catch { /* Parent displays the request error. */ } finally { setBusy(false) } }} className="btn btn-primary ml-auto min-h-11 px-4 text-[10px] disabled:opacity-50">
+        <button type="button" disabled={managerBusy || busy || photoBusy || externalChange || conflict || !isDirty || !getCategoryForMenuSection(draft.section, sections)} onClick={async () => { setBusy(true); try { const saved = await onSave(draft); setDraft(saved); setBaseItem(saved); setExternalChange(false) } catch { /* Parent displays the request error. */ } finally { setBusy(false) } }} className="btn btn-primary ml-auto min-h-11 px-4 text-[10px] disabled:opacity-50">
           {photoBusy ? 'Uploading photo…' : busy ? 'Saving…' : 'Save changes'}
         </button>
-        <button type="button" disabled title="Use Sanity Studio after editorial review. Deletion is not available in this draft-only manager." className="min-h-11 rounded-lg border border-ivory/10 px-3 text-xs text-ivory/40 disabled:opacity-60">
-          Delete in Studio
+        <button type="button" disabled={managerBusy || busy || photoBusy || externalChange || conflict} onClick={() => item.isArchived ? void onRestore(item) : void onArchive(item)} className={`min-h-11 rounded-lg border px-3 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze disabled:opacity-50 ${item.isArchived ? 'border-emerald-300/30 text-emerald-200 hover:bg-emerald-300/10' : 'border-amber-200/25 text-amber-100 hover:bg-amber-100/10'}`}>
+          {item.isArchived ? 'Restore item' : 'Archive item'}
         </button>
       </div>
     </article>
@@ -251,12 +261,14 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
   const [pendingBackup, setPendingBackup] = useState<MenuBackup | null>(null)
   const [pendingPreview, setPendingPreview] = useState<ImportPreview | null>(null)
   const [legacyAvailable, setLegacyAvailable] = useState(false)
-  const [pendingLegacy, setPendingLegacy] = useState(false)
+  const [legacyRecovery, setLegacyRecovery] = useState<LegacyMenuRecovery | null>(null)
+  const [selectedLegacyKeys, setSelectedLegacyKeys] = useState<string[]>([])
+  const [showArchived, setShowArchived] = useState(false)
   const [revisionConflict, setRevisionConflict] = useState(false)
   const [editorResetVersion, setEditorResetVersion] = useState(0)
   const dialogRef = useRef<HTMLDivElement>(null)
   const onCloseRef = useRef(onClose)
-  const { items, categories, loading, error, refresh, saveItem, exportMenu, previewImport, applyImport } = useLiveMenu({ forceLegacy: true, managerMode: isAuthenticated })
+  const { items, categories, loading, error, refresh, saveItem, setArchived, exportMenu, previewImport, applyImport } = useLiveMenu({ forceLegacy: true, managerMode: isAuthenticated })
   const sections = useMemo(() => getMenuSectionMappings(canonicalMenuItems, categories), [categories])
 
   useEffect(() => { onCloseRef.current = onClose }, [onClose])
@@ -307,11 +319,12 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
     }
   }, [isOpen])
 
-  const filteredItems = useMemo(() => items.filter((item) => {
+  const statusItems = useMemo(() => items.filter((item) => Boolean(item.isArchived) === showArchived), [items, showArchived])
+  const filteredItems = useMemo(() => statusItems.filter((item) => {
     const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory
     const matchesQuery = `${item.name} ${item.section} ${item.description || ''}`.toLowerCase().includes(query.toLowerCase())
     return matchesCategory && matchesQuery
-  }), [items, query, selectedCategory])
+  }), [statusItems, query, selectedCategory])
 
   if (!isOpen) return null
 
@@ -333,6 +346,11 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
     try {
       const snapshot = await refresh()
       if (!snapshot) throw new Error('The latest manager menu could not be loaded. Your current edits remain on screen.')
+      if (legacyRecovery) {
+        const updated = getLegacyMenuRecovery(snapshot)
+        setLegacyRecovery(updated)
+        setSelectedLegacyKeys((keys) => keys.filter((key) => updated?.records.some((record) => record.key === key && record.status === 'valid')))
+      }
       if (pendingBackup) {
         const refreshedPreview = await previewImport(pendingBackup)
         setPendingPreview(refreshedPreview)
@@ -340,7 +358,7 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
       setEditorResetVersion((version) => version + 1)
       setRevisionConflict(false)
       setErrorMsg('')
-      setSuccessMsg(pendingBackup ? 'Latest menu drafts reloaded. The selected backup preview was checked again against the new revision.' : 'Latest menu drafts reloaded. Search and category filters were kept in place.')
+      setSuccessMsg(pendingBackup ? 'Latest menu drafts reloaded. The selected backup preview was checked again against the new revision.' : legacyRecovery ? 'Latest menu loaded. Saved edits were rechecked against the current menu; review the refreshed values before applying.' : 'Latest menu drafts reloaded. Search and category filters were kept in place.')
     } catch (cause) { reportError(cause) }
     finally { setBusy(false) }
   }
@@ -375,6 +393,34 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
       else reportError(cause)
       throw cause
     }
+  }
+
+  const handleArchive = async (item: EnhancedMenuItem) => {
+    if (!window.confirm(`Archive ${item.name}?\n\nThis item will be hidden from the active customer menu. You can restore it later from Archived Items. It will remain unpublished.`)) return
+    setBusy(true)
+    try {
+      await setArchived(item.id, 'archive')
+      setErrorMsg('')
+      setRevisionConflict(false)
+      setSuccessMsg(`${item.name} archived. It remains available to restore and no content was published.`)
+    } catch (cause) {
+      if (cause instanceof AdminApiError && cause.status === 409) reportRevisionConflict()
+      else reportError(cause)
+    } finally { setBusy(false) }
+  }
+
+  const handleRestore = async (item: EnhancedMenuItem) => {
+    if (!window.confirm(`Restore ${item.name}?\n\nIt will return to ${item.section} under ${categories.find((category) => category.id === item.category)?.label || item.category}. This saves a draft and does not publish it.`)) return
+    setBusy(true)
+    try {
+      await setArchived(item.id, 'restore')
+      setErrorMsg('')
+      setRevisionConflict(false)
+      setSuccessMsg(`${item.name} restored to ${item.section} as an unpublished draft.`)
+    } catch (cause) {
+      if (cause instanceof AdminApiError && cause.status === 409) reportRevisionConflict()
+      else reportError(cause)
+    } finally { setBusy(false) }
   }
 
   const handleCreate = async (event: React.FormEvent) => {
@@ -422,22 +468,118 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
     try {
       const current = await refresh()
       if (!current) throw new Error('The latest shared menu could not be loaded. Try again before reviewing saved browser edits.')
-      const backup = getLegacyMenuBackup(current)
-      if (!backup) throw new Error('No saved browser edits were found.')
-      const preview = await previewImport(backup)
-      setPendingBackup(backup)
-      setPendingPreview(preview)
-      setPendingLegacy(true)
+      const recovery = getLegacyMenuRecovery(current)
+      if (!recovery) throw new Error('No saved browser edits were found.')
+      setLegacyRecovery(recovery)
+      setSelectedLegacyKeys(recovery.records.filter(({ status }) => status === 'valid').map(({ key }) => key))
       setErrorMsg('')
-      setSuccessMsg('Review the browser-saved changes before moving them to the shared menu.')
+      setPendingBackup(null)
+      setPendingPreview(null)
+      setSuccessMsg('Review each saved change. Obsolete, invalid, and archived records are kept until you explicitly discard them.')
     } catch (cause) { reportError(cause) }
+  }
+
+  const handleLegacyDiscard = (record: LegacyRecoveryRecord) => {
+    if (!window.confirm(`Remove the saved ${record.label.toLowerCase()} change for ${record.name} from this browser? This cannot be undone.`)) return
+    const removed = removeLegacyOverrideRecords([record], { onlyIfUnchanged: true })
+    if (!removed) { setErrorMsg('This saved value changed or could not be read while you reviewed it. Nothing was removed; review the current browser edits again.'); return }
+    setLegacyAvailable(hasLegacyMenuOverrides())
+    setLegacyRecovery((current) => current ? { ...current, records: current.records.filter(({ key }) => key !== record.key), total: current.total - 1 } : current)
+    setSelectedLegacyKeys((current) => current.filter((key) => key !== record.key))
+    setSuccessMsg(`Saved change for ${record.name} removed from this browser.`)
+  }
+
+  const handleDiscardMalformed = (issue: LegacyRecoveryIssue) => {
+    const wholeKey = issue.key === 'malformed:json' || issue.key === 'malformed:root'
+    const prompt = wholeKey
+      ? 'This saved data cannot be separated into individual records. Remove the Cafe In recovery key only? Other browser storage is not affected.'
+      : `Remove only the malformed “${issue.field}” entry? Other saved browser edits will be preserved.`
+    if (!window.confirm(prompt)) return
+    if (!discardMalformedLegacyOverride(issue)) { setErrorMsg('This browser could not remove the malformed recovery data. Nothing was changed.'); return }
+    setLegacyAvailable(hasLegacyMenuOverrides())
+    setLegacyRecovery((current) => current ? { ...current, malformed: current.malformed.filter(({ key }) => key !== issue.key), total: current.total - 1 } : current)
+    setSuccessMsg(wholeKey ? 'The malformed recovery key was removed. Other browser storage was left untouched.' : `Malformed ${issue.field} data was removed; the other saved browser edits were preserved.`)
+  }
+
+  const handleLegacyApply = async () => {
+    if (!legacyRecovery || !selectedLegacyKeys.length) return
+    setBusy(true)
+    const synchronized: LegacyRecoveryRecord[] = []
+    let cleanupComplete = true
+    try {
+      const current = await refresh()
+      if (!current) throw new Error('The latest shared menu could not be loaded. Saved browser edits remain untouched.')
+      if (current.revision !== legacyRecovery.revision) {
+        const updated = getLegacyMenuRecovery(current)
+        if (updated) {
+          setLegacyRecovery(updated)
+          setSelectedLegacyKeys((keys) => keys.filter((key) => updated.records.some((record) => record.key === key && record.status === 'valid')))
+        }
+        setRevisionConflict(true)
+        setErrorMsg('The shared menu changed while you reviewed these edits. Review the refreshed values before applying them. No saved edits were removed.')
+        return
+      }
+      const latestRecovery = getLegacyMenuRecovery(current)
+      if (!latestRecovery) throw new Error('Saved browser edits are no longer available. Nothing was applied.')
+      const selectedRecords = legacyRecovery.records.filter((record) => selectedLegacyKeys.includes(record.key) && record.status === 'valid')
+      const latestByKey = new Map(latestRecovery.records.map((record) => [record.key, record]))
+      const changedSelection = selectedRecords.some((record) => {
+        const latest = latestByKey.get(record.key)
+        return !latest || latest.status !== 'valid' || JSON.stringify(latest.value) !== JSON.stringify(record.value)
+      })
+      if (changedSelection) {
+        setLegacyRecovery(latestRecovery)
+        setSelectedLegacyKeys((keys) => keys.filter((key) => latestByKey.get(key)?.status === 'valid'))
+        setErrorMsg('Saved browser edits changed in this browser while you reviewed them. Review the refreshed records before applying. No data was removed.')
+        return
+      }
+      const recoveryItems = buildLegacyRecoveryItems(current, latestRecovery, selectedLegacyKeys)
+      if (!recoveryItems.length) {
+        if (!window.confirm(`The ${selectedRecords.length} selected browser edit${selectedRecords.length === 1 ? '' : 's'} already match the current server drafts. Remove only these matching records from this browser?`)) return
+        const removed = removeLegacyOverrideRecords(selectedRecords, { onlyIfUnchanged: true })
+        setLegacyAvailable(hasLegacyMenuOverrides())
+        setLegacyRecovery(null)
+        setSelectedLegacyKeys([])
+        setErrorMsg('')
+        setRevisionConflict(false)
+        setSuccessMsg(removed ? 'Selected values already matched the current menu and were cleared from browser recovery.' : 'The browser values changed during review; nothing new was removed. Review saved edits again.')
+        return
+      }
+      if (!window.confirm(`Apply ${selectedRecords.length} selected browser edit${selectedRecords.length === 1 ? '' : 's'}?\n\nThese changes will be saved as unpublished drafts. Other saved, invalid, obsolete, and archived edits will remain in this browser.`)) return
+      for (const item of recoveryItems) {
+        await saveItem(item)
+        const savedRecords = selectedRecords.filter((record) => record.id === item.id)
+        synchronized.push(...savedRecords)
+        if (!removeLegacyOverrideRecords(savedRecords, { onlyIfUnchanged: true })) cleanupComplete = false
+      }
+      setLegacyAvailable(hasLegacyMenuOverrides())
+      setLegacyRecovery(null)
+      setSelectedLegacyKeys([])
+      setErrorMsg('')
+      setRevisionConflict(false)
+      setSuccessMsg(cleanupComplete
+        ? `${selectedRecords.length} selected browser edit${selectedRecords.length === 1 ? '' : 's'} saved as unpublished drafts. Other recovery records were preserved.`
+        : 'Selected edits were saved as unpublished drafts, but this browser could not clear them from recovery storage. Review them before another apply.')
+    } catch (cause) {
+      if (synchronized.length) {
+        const refreshed = await refresh()
+        const updated = refreshed ? getLegacyMenuRecovery(refreshed) : null
+        setLegacyRecovery(updated)
+        setSelectedLegacyKeys([])
+        setLegacyAvailable(hasLegacyMenuOverrides())
+        setErrorMsg(cause instanceof Error ? cause.message : 'Some changes could not be saved.')
+        setSuccessMsg(`${synchronized.length} browser edit${synchronized.length === 1 ? '' : 's'} were saved as drafts. Remaining edits were kept in this browser and must be reviewed before retrying.`)
+        setRevisionConflict(cause instanceof AdminApiError && cause.status === 409)
+      } else if (cause instanceof AdminApiError && cause.status === 409) reportRevisionConflict()
+      else reportError(cause)
+    } finally { setBusy(false) }
   }
 
   const handleFile = async (file?: File) => {
     if (!file) return
     setPendingBackup(null)
     setPendingPreview(null)
-    setPendingLegacy(false)
+    setLegacyRecovery(null)
     setErrorMsg('')
     setSuccessMsg('')
     try {
@@ -451,18 +593,13 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
 
   const handleImport = async () => {
     if (!pendingBackup || !pendingPreview) return
-    const summary = `${pendingLegacy ? 'Stage the saved browser edits?' : 'Stage this backup?'}\n\nAdd: ${pendingPreview.added.length}\nUpdate: ${pendingPreview.updated.length}\nRemove: ${pendingPreview.removed.length}\n\nChanges will be saved as Sanity drafts and will not be published.`
+    const summary = `Stage this backup?\n\nAdd: ${pendingPreview.added.length}\nUpdate: ${pendingPreview.updated.length}\nRemove: ${pendingPreview.removed.length}\n\nChanges will be saved as Sanity drafts and will not be published.`
     if (!window.confirm(summary)) return
     setBusy(true)
     try {
       const snapshot = await applyImport(pendingBackup, pendingPreview.baseRevision)
-      if (pendingLegacy) {
-        setLegacyAvailable(!clearLegacyMenuOverrides())
-        clearLegacyAdminPin()
-      }
       setPendingBackup(null)
       setPendingPreview(null)
-      setPendingLegacy(false)
       setErrorMsg('')
       setRevisionConflict(false)
       setSuccessMsg(`Menu backup saved as drafts. ${snapshot.items.length} items are available for review.`)
@@ -548,20 +685,57 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
               <input id="manager-search" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by name, section, or description" className="min-h-11 min-w-0 rounded-xl border border-ivory/15 bg-black/30 px-3 text-sm text-ivory placeholder:text-ivory/45 focus:border-bronze focus:outline-none focus-visible:ring-2 focus-visible:ring-bronze/60" />
               <label className="sr-only" htmlFor="manager-category">Filter by category</label>
               <select id="manager-category" value={selectedCategory} onChange={(event) => setSelectedCategory(event.target.value)} className="min-h-11 min-w-0 rounded-xl border border-ivory/15 bg-espresso px-3 text-sm text-ivory focus:border-bronze focus:outline-none focus-visible:ring-2 focus-visible:ring-bronze/60">
-                <option value="all">All categories ({items.length})</option>
+                <option value="all">All categories ({statusItems.length})</option>
                 {categories.map((category) => <option key={category.id} value={category.id}>{category.label}</option>)}
               </select>
               <button type="button" disabled={loading || busy} onClick={() => void handleReloadLatest()} className="min-h-11 rounded-xl border border-ivory/15 px-4 text-xs text-ivory/75 transition-colors hover:border-bronze/50 hover:text-ivory focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bronze disabled:opacity-50">Reload latest</button>
             </div>
 
+            <div role="group" aria-label="Menu item status" className="mb-3 flex flex-wrap items-center gap-2">
+              <button type="button" aria-pressed={!showArchived} onClick={() => setShowArchived(false)} className={`min-h-11 rounded-full border px-4 text-xs transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze ${!showArchived ? 'border-bronze/50 bg-bronze/10 text-bronze' : 'border-ivory/15 text-ivory/60 hover:text-ivory'}`}>Active items <span className="ml-1 tabular-nums">{items.filter((item) => !item.isArchived).length}</span></button>
+              <button type="button" aria-pressed={showArchived} onClick={() => setShowArchived(true)} className={`min-h-11 rounded-full border px-4 text-xs transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze ${showArchived ? 'border-bronze/50 bg-bronze/10 text-bronze' : 'border-ivory/15 text-ivory/60 hover:text-ivory'}`}>Archived Items <span className="ml-1 tabular-nums">{items.filter((item) => item.isArchived).length}</span></button>
+            </div>
+
             <div className="mb-2 flex shrink-0 items-center justify-between text-[11px] text-ivory/55">
-              <p aria-live="polite" aria-atomic="true">{loading ? 'Loading menu drafts...' : `${filteredItems.length} of ${items.length} menu items`}</p>
+              <p aria-live="polite" aria-atomic="true">{loading ? 'Loading menu drafts...' : `${filteredItems.length} of ${statusItems.length} ${showArchived ? 'archived' : 'active'} items`}</p>
               <p className="hidden sm:block">Select an item to edit its draft</p>
             </div>
 
             <div className="grid min-h-0 flex-1 grid-cols-1 content-start gap-3 overflow-y-auto overscroll-contain pr-1 sm:pr-2 lg:grid-cols-2">
-              {loading ? <p className="py-10 text-center text-sm text-ivory/55">Loading menu drafts...</p> : filteredItems.length ? filteredItems.map((item) => <ItemEditor key={`${item.id}:${editorResetVersion}`} item={item} categories={categories} sections={sections} conflict={revisionConflict} onSave={handleSave} />) : <div className="rounded-2xl border border-dashed border-ivory/15 px-5 py-12 text-center"><p className="font-display text-lg text-ivory">No items found</p><p className="mt-2 text-xs text-ivory/55">Try another search or category filter.</p></div>}
+              {loading ? <p className="py-10 text-center text-sm text-ivory/55">Loading menu drafts...</p> : filteredItems.length ? filteredItems.map((item) => <ItemEditor key={`${item.id}:${editorResetVersion}`} item={item} categories={categories} sections={sections} conflict={revisionConflict} managerBusy={busy} onSave={handleSave} onArchive={handleArchive} onRestore={handleRestore} />) : <div className="rounded-2xl border border-dashed border-ivory/15 px-5 py-12 text-center"><p className="font-display text-lg text-ivory">{showArchived ? 'No archived items' : 'No items found'}</p><p className="mt-2 text-xs text-ivory/55">{showArchived ? 'Items you archive will remain here and can be restored at any time.' : 'Try another search or category filter.'}</p></div>}
             </div>
+
+            {legacyRecovery && (
+              <section aria-labelledby="legacy-recovery-title" className="mt-3 shrink-0 rounded-xl border border-bronze/30 bg-bronze/[0.07] p-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <h3 id="legacy-recovery-title" className="text-sm font-semibold text-ivory">Saved browser edits</h3>
+                    <p className="mt-1 text-[10px] leading-relaxed text-ivory/65">{legacyRecovery.total} records · {legacyRecovery.records.filter(({ status }) => status === 'valid').length} valid · {legacyRecovery.records.filter(({ status }) => status === 'obsolete').length} obsolete · {legacyRecovery.records.filter(({ status }) => status === 'invalid').length + legacyRecovery.malformed.length} invalid or malformed · {legacyRecovery.records.filter(({ status }) => status === 'archived').length} archived · {revisionConflict ? 1 : 0} revision conflicts</p>
+                    <p className="mt-1 text-[10px] text-ivory/50">Valid edits show the current draft and saved browser value. Applying saves unpublished drafts only.</p>
+                  </div>
+                  <button type="button" onClick={() => setLegacyRecovery(null)} className="min-h-11 rounded-lg px-3 text-[10px] text-ivory/60 hover:text-ivory focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze">Close review</button>
+                </div>
+                <div className="mt-3 max-h-56 space-y-2 overflow-y-auto pr-1">
+                  {legacyRecovery.records.map((record) => (
+                    <div key={record.key} className="grid gap-2 rounded-lg border border-ivory/10 bg-black/20 p-2.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                      <div className="min-w-0">
+                        <p className="break-words text-[11px] font-medium text-ivory">{record.name} <span className="text-ivory/45">· {record.label}</span></p>
+                        {record.status === 'valid' ? <p className="mt-1 break-words text-[10px] text-ivory/60">Current draft: <span className="text-ivory/85">{formatRecoveryValue(record, record.currentValue)}</span> <span className="mx-1 text-bronze">→</span> Saved browser value: <span className="text-bronze">{formatRecoveryValue(record, record.value)}</span></p> : <p className="mt-1 text-[10px] leading-relaxed text-amber-100/80">{record.reason}</p>}
+                      </div>
+                      <div className="flex min-h-10 items-center gap-3">
+                        {record.status === 'valid' && <label className="inline-flex min-h-10 items-center gap-2 text-[10px] text-ivory/75"><input type="checkbox" aria-label={`Apply ${record.label} for ${record.name}`} checked={selectedLegacyKeys.includes(record.key)} onChange={(event) => setSelectedLegacyKeys((keys) => event.target.checked ? [...new Set([...keys, record.key])] : keys.filter((key) => key !== record.key))} className="h-4 w-4 accent-[#C49A63]" />Apply</label>}
+                        <button type="button" onClick={() => handleLegacyDiscard(record)} className="min-h-11 rounded-md px-2 text-[10px] text-ivory/55 underline decoration-ivory/25 underline-offset-2 hover:text-ivory focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze">Discard</button>
+                      </div>
+                    </div>
+                  ))}
+                  {legacyRecovery.malformed.map((record) => <div key={record.key} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200/15 bg-black/20 p-2.5"><p className="text-[10px] leading-relaxed text-amber-100/80">{record.field}: {record.reason}</p><button type="button" onClick={() => handleDiscardMalformed(record)} className="min-h-11 px-2 text-[10px] text-ivory/55 underline underline-offset-2 hover:text-ivory focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze">Discard this malformed record</button></div>)}
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button type="button" disabled={busy || !selectedLegacyKeys.some((key) => legacyRecovery.records.some((record) => record.key === key && record.status === 'valid'))} onClick={() => void handleLegacyApply()} className="min-h-11 rounded-lg bg-bronze px-4 text-xs font-semibold text-espresso disabled:opacity-50">{busy ? 'Checking and saving…' : `Apply selected (${selectedLegacyKeys.filter((key) => legacyRecovery.records.some((record) => record.key === key && record.status === 'valid')).length})`}</button>
+                  <p className="text-[10px] text-ivory/50">Unselected and unresolved records stay saved in this browser.</p>
+                </div>
+              </section>
+            )}
 
             {pendingPreview && (
               <div className="mt-3 rounded-xl border border-bronze/30 bg-bronze/10 p-3 text-xs">
@@ -581,7 +755,7 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
                   ))}
                 </div>
                 <button type="button" disabled={busy || pendingPreview.removed.length > 0} onClick={() => void handleImport()} className="mt-2 min-h-10 rounded-lg bg-bronze px-3 text-[10px] font-semibold text-espresso disabled:opacity-50">{busy ? 'Saving drafts…' : 'Stage backup as drafts'}</button>
-                <button type="button" onClick={() => { setPendingBackup(null); setPendingPreview(null); setPendingLegacy(false) }} className="ml-2 min-h-10 px-3 text-[10px] text-ivory/65">Cancel</button>
+                <button type="button" onClick={() => { setPendingBackup(null); setPendingPreview(null) }} className="ml-2 min-h-10 px-3 text-[10px] text-ivory/65">Cancel</button>
               </div>
             )}
 

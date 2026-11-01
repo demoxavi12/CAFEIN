@@ -5,6 +5,7 @@ import { fetchLocalDraftPreview } from './sanityPreview'
 
 export interface EnhancedMenuItem extends MenuItem {
   isSoldOut: boolean
+  isArchived?: boolean
   badge?: string
   order?: number
 }
@@ -217,6 +218,13 @@ export function useLiveMenu(options: { forceLegacy?: boolean; draftPreview?: boo
       acceptSnapshot(current)
       return current
     } catch (cause) {
+      if (cause instanceof AdminApiError && cause.code === 'archive_state_unavailable') {
+        setItems([])
+        setCategories([])
+        setRevision(0)
+        revisionRef.current = 0
+        hasSnapshotRef.current = false
+      }
       setError(cause instanceof Error ? cause.message : 'The menu could not be loaded.')
       setLoading(false)
       return null
@@ -264,6 +272,17 @@ export function useLiveMenu(options: { forceLegacy?: boolean; draftPreview?: boo
     return snapshot.items.find((entry) => entry.id === item.id)!
   }, [items, saveSnapshot])
 
+  const setArchived = useCallback(async (id: string, action: 'archive' | 'restore') => {
+    const result = await adminRequest<{ revision: number }>(`/api/admin/menu/${encodeURIComponent(id)}/${action}`, {
+      method: 'POST',
+      headers: { 'If-Match': `"${revisionRef.current}"` },
+    })
+    const snapshot = await requestJson<MenuSnapshot>('/api/admin/menu')
+    if (snapshot.revision !== result.revision) throw new AdminApiError('The menu changed while your request was completing. Reload before continuing.', 409, 'revision_conflict')
+    saveSnapshot(snapshot)
+    return snapshot.items.find((item) => item.id === id)
+  }, [saveSnapshot])
+
   const deleteItem = useCallback(async (id: string) => {
     const result = await adminRequest<{ revision: number }>(`/api/admin/menu/${encodeURIComponent(id)}`, {
       method: 'DELETE',
@@ -293,5 +312,5 @@ export function useLiveMenu(options: { forceLegacy?: boolean; draftPreview?: boo
     return snapshot
   }, [saveSnapshot])
 
-  return { items, categories, revision, loading, error, dataSource, previewError, previewSummary, refresh, saveItem, deleteItem, exportMenu, previewImport, applyImport }
+  return { items, categories, revision, loading, error, dataSource, previewError, previewSummary, refresh, saveItem, setArchived, deleteItem, exportMenu, previewImport, applyImport }
 }

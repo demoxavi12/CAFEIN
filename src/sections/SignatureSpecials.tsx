@@ -150,7 +150,8 @@ export function SignatureSpecials({ onSelect }: Props) {
       void import('../digital-menu/sanityContent').then(({ fetchPublishedSpecials }) => fetchPublishedSpecials()).then((result) => {
         if (active && result) setPublishedSpecials((current) => JSON.stringify(current) === JSON.stringify(result) ? current : result)
       }).catch(() => {
-        // Continue to use the existing menu-backed special selection if published specials are unavailable.
+        if (active) setPublishedSpecials(null)
+        // Use only the currently verified active menu-backed selection when published specials are unavailable.
       })
     }
     refresh()

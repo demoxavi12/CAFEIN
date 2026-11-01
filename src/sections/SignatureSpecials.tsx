@@ -240,7 +240,7 @@ export function SignatureSpecials({ onSelect }: Props) {
   }
 
   return (
-    <section id="specials" aria-labelledby="specials-title" className="relative isolate overflow-hidden bg-espresso-2 py-24 text-ivory sm:py-32 lg:py-24">
+    <section id="specials" aria-labelledby="specials-title" className="relative isolate overflow-hidden bg-espresso-2 py-16 text-ivory sm:py-20 lg:py-20">
       <EmberBackground strength="warm" />
       <div className="container-x relative z-10">
         <SectionHeading id="specials-title" eyebrow={publishedSpecials?.eyebrow ?? specials.eyebrow} title={publishedSpecials?.title ?? specials.title} italic="at Cafe In." />
@@ -255,7 +255,7 @@ export function SignatureSpecials({ onSelect }: Props) {
         )}
       </div>
 
-      <div role="region" aria-roledescription="carousel" aria-label="Signature specials" className="relative z-10 mx-auto mt-12 w-full max-w-[1200px] sm:mt-16 lg:mt-12">
+      <div role="region" aria-roledescription="carousel" aria-label="Signature specials" className="relative z-10 mx-auto mt-8 w-full max-w-[1200px] sm:mt-10 lg:mt-8">
         <ul
           tabIndex={0}
           aria-label="Signature specials — use the left and right arrow keys or swipe to browse"
@@ -294,7 +294,7 @@ export function SignatureSpecials({ onSelect }: Props) {
           ))}
         </ul>
 
-        <div className={`mt-4 flex justify-center gap-3 sm:mt-6 lg:mt-2 ${canScroll ? '' : 'invisible'}`}>
+        <div className={`mt-3 flex justify-center gap-3 sm:mt-4 lg:mt-2 ${canScroll ? '' : 'invisible'}`}>
           <button
             type="button"
             onClick={() => step(-1)}
@@ -313,7 +313,7 @@ export function SignatureSpecials({ onSelect }: Props) {
           </button>
         </div>
 
-        <div className="container-x mt-4 flex items-center gap-5 sm:mt-6 lg:mt-3">
+        <div className="container-x mt-3 flex items-center gap-5 sm:mt-4 lg:mt-3">
           <p className="label shrink-0 text-ivory-2 tabular-nums" aria-live="polite">
             <span className="sr-only">Showing </span>
             {pad(activeIndex + 1)} <span className="text-ivory/45">/ {pad(total)}</span>

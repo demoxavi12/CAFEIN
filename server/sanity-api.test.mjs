@@ -6,6 +6,8 @@ import { promisify } from 'node:util'
 import adminApi from '../api/admin.mjs'
 import { createSanityApiHandler } from './sanity-api.mjs'
 import { restoreAdminPath } from './vercel-admin-route.mjs'
+import { loadSeedMenu } from './seed.mjs'
+import { getMenuSectionMappings, getCategoryForMenuSection } from '../shared/menu-taxonomy.mjs'
 
 const scrypt = promisify(scryptCallback)
 async function makePasswordHash(password) {
@@ -16,7 +18,7 @@ async function makePasswordHash(password) {
 
 const categories = [{ id: 'beverages', label: 'Coffee & Beverages', short: 'Coffee', blurb: 'Coffee', _updatedAt: '2026-01-01T00:00:00Z', _id: 'drafts.menuCategory-beverages' }]
 const rawItem = { id: 'espresso', name: 'Espresso', price: 50, categoryId: 'beverages', section: 'Essence of Espresso', description: 'A short coffee.', isSoldOut: false, badge: 'Bestseller', order: 0, _updatedAt: '2026-01-02T00:00:00Z', _rev: 'espresso-rev-1', _id: 'drafts.menuItem-espresso', image: { asset: { _ref: 'image-abc123-1200x800-jpg' }, alt: 'Espresso', width: 1200, height: 800 } }
-const seed = { categories: categories.map(({ _id, _updatedAt, ...entry }) => entry), items: [{ id: 'fallback', name: 'Fallback', price: 10, category: 'beverages', section: 'Coffee', isSoldOut: false }] }
+const seed = { categories: categories.map(({ _id, _updatedAt, ...entry }) => entry), items: [{ id: 'fallback', name: 'Fallback', price: 10, category: 'beverages', section: 'Coffee', isSoldOut: false }, { id: 'canonical-espresso', name: 'Espresso', price: 50, category: 'beverages', section: 'Essence of Espresso', isSoldOut: false }] }
 const publishedSeed = { categories: seed.categories, items: [{ id: rawItem.id, name: rawItem.name, price: rawItem.price, category: rawItem.categoryId, section: rawItem.section, isSoldOut: false }] }
 const env = { NODE_ENV: 'development', PUBLIC_ORIGIN: 'https://cafe-in.test', ADMIN_PASSWORD_HASH: '', ADMIN_SESSION_SECRET: 's'.repeat(48), SANITY_API_TOKEN: 'server-only' }
 const imageUrlBuilder = () => ({ image: (image) => ({ auto: () => ({ fit: () => ({ url: () => 'https://cdn.sanity.io/images/kgt3bhzl/production/' + image.asset._ref }) }) }) })
@@ -60,16 +62,78 @@ test('Vercel admin function dispatches a rewritten nested session route', async 
   assert.deepEqual(res.body, { authenticated: false })
 })
 
-function fakeClient({ fail = false } = {}) {
+function fakeClient({ fail = false, categoryDocs = categories, itemDocs = [rawItem] } = {}) {
   const fetch = async (query) => {
     if (fail) throw new Error('Sanity unavailable')
-    if (query.includes('_type == \"menuCategory\"')) return categories
-    if (query.includes('_type == \"menuItem\"')) return [rawItem]
-    if (query.includes('_id in path(\"drafts.*\")')) return query.includes('menuCategory') ? categories : [rawItem]
+    if (query.includes('_type == \"menuCategory\"')) return categoryDocs
+    if (query.includes('_type == \"menuItem\"')) return itemDocs
+    if (query.includes('_id in path(\"drafts.*\")')) return query.includes('menuCategory') ? categoryDocs : itemDocs
     return null
   }
   return { fetch, withConfig: () => ({ fetch }), assets: { upload: async () => ({ _id: rawItem.image.asset._ref, url: 'https://cdn.sanity.io/photo.jpg' }) }, create: async (doc) => doc, createOrReplace: async (doc) => doc, transaction: () => ({ delete() { return this }, create() { return this }, patch() { return this }, createOrReplace() { return this }, commit: async () => ({}) }), action: async () => ({}), patch: () => ({ ifRevisionId() { return this }, set() { return this }, unset() { return this }, commit: async () => ({}) }) }
 }
+
+test('canonical menu sections map to their existing parent categories without ambiguity', () => {
+  const canonical = loadSeedMenu()
+  const mappings = getMenuSectionMappings(canonical.items, canonical.categories)
+  assert.equal(mappings.length, 13)
+  assert.equal(getCategoryForMenuSection('Essence of Espresso', mappings), 'beverages')
+  assert.equal(getCategoryForMenuSection('Coffee & Beverages', mappings), null)
+  assert.equal(getCategoryForMenuSection('Crisp & Quick', mappings), 'quick-bites')
+  assert.equal(getCategoryForMenuSection('Pastas', mappings), 'meals')
+  assert.equal(getCategoryForMenuSection('Sweet Temptations', mappings), 'desserts')
+  assert.equal(getCategoryForMenuSection('Unconfigured section', mappings), null)
+})
+
+test('admin menu writes derive category from the selected section and reject unknown sections', async () => {
+  const secureEnv = { ...env, ADMIN_PASSWORD_HASH: await makePasswordHash('test password') }
+  const canonical = loadSeedMenu()
+  const categoryDocs = canonical.categories.map((category) => ({ id: category.id, label: category.label, short: category.short, blurb: category.blurb, _updatedAt: '2026-01-01T00:00:00Z', _id: `drafts.menuCategory-${category.id}` }))
+  const taxonomySeed = { categories: canonical.categories, items: canonical.items }
+  let savedDocument
+  let writes = 0
+  const client = fakeClient({ categoryDocs })
+  const writeClient = fakeClient({ categoryDocs })
+  writeClient.create = async (document) => { savedDocument = document; writes += 1; return document }
+  const handler = createSanityApiHandler({ env: secureEnv, client, writeClient, seed: taxonomySeed, imageUrlBuilder })
+  const login = await call(handler, '/api/admin/login', { method: 'POST', headers: { origin: secureEnv.PUBLIC_ORIGIN }, body: { password: 'test password' } })
+  const cookie = login.headers['Set-Cookie'].split(';')[0]
+  const session = await call(handler, '/api/admin/session', { headers: { cookie } })
+  const current = await call(handler, '/api/admin/menu', { headers: { cookie } })
+  const headers = { cookie, origin: secureEnv.PUBLIC_ORIGIN, 'x-csrf-token': session.body.csrfToken, 'if-match': `"${current.body.revision}"` }
+
+  const created = await call(handler, '/api/admin/menu', {
+    method: 'POST', headers,
+    body: { id: 'new-fries', name: 'New fries', price: 120, category: 'desserts', section: 'Crisp & Quick', isSoldOut: false },
+  })
+  assert.equal(created.status, 201)
+  assert.equal(savedDocument.category._ref, 'menuCategory-quick-bites')
+  assert.equal(writes, 1)
+
+  const edited = await call(handler, '/api/admin/menu/espresso', {
+    method: 'PUT', headers,
+    body: { ...current.body.items[0], category: 'beverages', section: 'Pastas' },
+  })
+  assert.equal(edited.status, 200)
+  assert.equal(savedDocument.category._ref, 'menuCategory-meals')
+  assert.equal(savedDocument.image.asset._ref, rawItem.image.asset._ref)
+
+  const invalid = await call(handler, '/api/admin/menu', {
+    method: 'POST', headers,
+    body: { id: 'unknown-section-item', name: 'Unknown section item', price: 100, category: 'beverages', section: 'Not a configured section', isSoldOut: false },
+  })
+  assert.equal(invalid.status, 400)
+  assert.equal(invalid.body.code, 'invalid_section')
+  assert.equal(writes, 2)
+
+  const badBackup = await call(handler, '/api/admin/import/preview', {
+    method: 'POST', headers,
+    body: { schemaVersion: 1, revision: current.body.revision, categories: current.body.categories, items: [{ id: 'backup-item', name: 'Backup item', price: 20, category: 'beverages', section: 'Not a configured section', isSoldOut: false }] },
+  })
+  assert.equal(badBackup.status, 400)
+  assert.equal(badBackup.body.code, 'invalid_section')
+  assert.equal(writes, 2)
+})
 
 function response() {
   return { headers: {}, writeHead(status, headers) { this.status = status; this.headers = headers }, end(body) { this.body = JSON.parse(body) } }
@@ -403,7 +467,7 @@ test('backup apply resumes with revision-guarded draft patches and deterministic
     schemaVersion: 1,
     revision: current.body.revision,
     categories: current.body.categories,
-    items: [...current.body.items, { id: 'new-latte', name: 'New Latte', price: 80, category: 'beverages', section: 'Espresso', isSoldOut: false }],
+    items: [...current.body.items, { id: 'new-latte', name: 'New Latte', price: 80, category: 'beverages', section: 'Essence of Espresso', isSoldOut: false }],
   }
   const applied = await call(handler, '/api/admin/import/apply', {
     method: 'POST',

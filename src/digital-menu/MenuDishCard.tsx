@@ -23,6 +23,7 @@ interface Props {
   onRemove: (id: string) => void
   compact?: boolean
   showTrayActions?: boolean
+  equalHeight?: boolean
 }
 
 /**
@@ -115,9 +116,11 @@ export function MenuDishCard({
   onRemove,
   compact = false,
   showTrayActions = true,
+  equalHeight = false,
 }: Props) {
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null)
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
+  const displayName = item.id === 'mango-matcha' ? 'Mango Matcha' : item.name
   const motif = getCategoryMotif(item.category, item.section, item.name)
   const MotifIcon = motif.icon
   const imgLoaded = Boolean(item.image && loadedSrc === item.image.src)
@@ -126,7 +129,7 @@ export function MenuDishCard({
   return (
     <motion.div
       whileTap={{ scale: 0.985 }}
-      className={`group relative flex flex-col justify-between rounded-2xl border border-ivory/12 bg-gradient-to-b from-mocha/85 via-espresso-2/95 to-espresso p-4 shadow-xl backdrop-blur-md transition-all duration-300 hover:border-bronze/45 hover:shadow-2xl hover:shadow-bronze/5 ${
+      className={`group relative flex flex-col justify-between rounded-2xl border border-ivory/12 bg-gradient-to-b from-mocha/85 via-espresso-2/95 to-espresso p-4 shadow-xl backdrop-blur-md transition-all duration-300 hover:border-bronze/45 hover:shadow-2xl hover:shadow-bronze/5 ${equalHeight ? 'h-full' : ''} ${
         compact ? 'w-[280px] shrink-0' : 'w-full'
       } ${item.isSoldOut ? 'opacity-65 grayscale-[25%]' : ''}`}
     >
@@ -142,10 +145,10 @@ export function MenuDishCard({
         className="cursor-pointer select-none text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bronze"
         role="button"
         tabIndex={0}
-        aria-label={`View ${item.name} details`}
+        aria-label={`View ${displayName} details`}
       >
         {/* Top Badges: Veg dot, Badge (Bestseller), Price */}
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start gap-2">
           <div className="flex items-center gap-1.5 flex-wrap">
             {/* Green Veg Icon */}
             <span
@@ -168,9 +171,6 @@ export function MenuDishCard({
             )}
           </div>
 
-          <span className="rounded-full bg-espresso-2/90 px-2.5 py-1 font-mono text-sm font-bold text-bronze shadow-inner border border-ivory/10">
-            ₹{item.price}
-          </span>
         </div>
 
         {/* Dish Visual Area: Real photo OR Luxury Culinary Skeleton */}
@@ -182,8 +182,8 @@ export function MenuDishCard({
                 <div className="absolute inset-0 bg-gradient-to-r from-espresso via-mocha/40 to-espresso">
                   <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-ivory/10 to-transparent" />
                   <div className="flex h-full items-center justify-center">
-                    <span className="text-[10px] uppercase font-mono tracking-wider text-ivory/40">
-                      Loading Capture…
+                    <span className="text-xs uppercase font-mono tracking-wider text-ivory/50">
+                      Loading capture…
                     </span>
                   </div>
                 </div>
@@ -192,7 +192,7 @@ export function MenuDishCard({
               {/* Real in-café photo */}
               <img
                 src={item.image.src}
-                alt={item.name}
+                alt={displayName}
                 loading="lazy"
                 decoding="async"
                 width={item.image.width}
@@ -221,7 +221,7 @@ export function MenuDishCard({
             <div className="relative flex h-full w-full flex-col items-center justify-center overflow-hidden bg-gradient-to-b from-[#1b1511] via-[#140e0b] to-[#0d0907] px-3 text-center">
               {/* Background ambient radial glow */}
               <div
-                className={`absolute inset-0 bg-gradient-to-br ${motif.accent} opacity-60 pointer-events-none`}
+                className={`absolute inset-0 bg-gradient-to-br ${motif.accent} opacity-30 pointer-events-none`}
               />
 
               {/* Fine Shimmer light sweep */}
@@ -242,10 +242,10 @@ export function MenuDishCard({
 
               {/* Badge & Subtitle */}
               <div className="relative z-10 flex flex-col items-center gap-0.5">
-                <span className="rounded-full bg-ivory/5 px-2.5 py-0.5 text-[9px] font-mono font-medium uppercase tracking-widest text-ivory/70 border border-ivory/10 shadow-sm">
+                <span className="rounded-full bg-ivory/5 px-2.5 py-0.5 text-[10px] font-mono font-medium uppercase tracking-widest text-ivory/70 border border-ivory/10 shadow-sm">
                   Photo Coming Soon
                 </span>
-                <span className="text-[10px] font-sans text-ivory/40">
+                <span className="text-xs font-sans text-ivory/55">
                   {motif.label} • Made Fresh
                 </span>
               </div>
@@ -258,30 +258,38 @@ export function MenuDishCard({
 
         {/* Dish Title & Section */}
         <div className="mt-3.5">
-          <p className="text-[10px] font-mono uppercase tracking-widest text-bronze/90">
+          <p className="text-xs font-mono tracking-wide text-bronze/90">
             {item.section}
           </p>
-          <h4 className="mt-0.5 font-display text-lg text-ivory group-hover:text-bronze transition-colors leading-snug">
-            {item.name}
-          </h4>
+          <div className="mt-0.5 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+            <h4 className="min-w-0 flex-1 font-display text-lg text-ivory group-hover:text-bronze transition-colors leading-snug">
+              {displayName}
+            </h4>
+            <span className="shrink-0 rounded-full bg-espresso-2/90 px-2.5 py-1 font-mono text-sm font-bold text-bronze shadow-inner border border-ivory/10">
+              ₹{item.price}
+            </span>
+          </div>
         </div>
 
         {/* Description */}
-        {item.description && (
-          <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-ivory/65">
-            {item.description}
+        {(item.description || equalHeight) && (
+          <p
+            aria-hidden={equalHeight && !item.description ? true : undefined}
+            className={`mt-1.5 line-clamp-2 text-xs leading-relaxed text-ivory/65 ${equalHeight ? 'min-h-[3em]' : ''}`}
+          >
+            {item.description || ''}
           </p>
         )}
       </div>
 
       {/* Footer Controls: Details trigger + Add/Remove Stepper */}
-      <div className="mt-4 flex items-center justify-between border-t border-ivory/10 pt-3">
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-ivory/10 pt-3">
         <button
           type="button"
           onClick={() => onSelect(item)}
-          className="inline-flex items-center gap-1 text-[11px] font-medium tracking-wide text-ivory/60 hover:text-ivory transition-colors group/btn"
+          className="inline-flex min-h-11 items-center gap-1 rounded-full border border-ivory/12 bg-ivory/5 px-2.5 text-xs font-medium tracking-wide text-ivory/75 transition-colors hover:border-bronze/40 hover:bg-ivory/10 hover:text-ivory group/btn"
         >
-          <Info className="w-3 h-3 text-bronze group-hover/btn:text-ivory transition-colors" />
+          <Info aria-hidden="true" className="h-3.5 w-3.5 text-bronze transition-colors group-hover/btn:text-ivory" />
           <span className="underline underline-offset-4">Details</span>
         </button>
 
@@ -296,7 +304,7 @@ export function MenuDishCard({
                 e.stopPropagation()
                 onRemove(item.id)
               }}
-              className="flex h-6 w-6 items-center justify-center rounded-full bg-espresso text-ivory hover:bg-bronze hover:text-espresso transition-colors text-xs font-bold active:scale-90"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-espresso text-ivory hover:bg-bronze hover:text-espresso transition-colors text-xs font-bold active:scale-90"
               aria-label="Decrease quantity"
             >
               <Minus className="w-3 h-3" />
@@ -310,7 +318,7 @@ export function MenuDishCard({
                 e.stopPropagation()
                 onAdd(item.id)
               }}
-              className="flex h-6 w-6 items-center justify-center rounded-full bg-bronze text-espresso hover:brightness-110 transition-colors text-xs font-bold active:scale-90"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-bronze text-espresso hover:brightness-110 transition-colors text-xs font-bold active:scale-90"
               aria-label="Increase quantity"
             >
               <Plus className="w-3 h-3" />
@@ -323,7 +331,7 @@ export function MenuDishCard({
               e.stopPropagation()
               onAdd(item.id)
             }}
-            className="inline-flex items-center gap-1.5 rounded-full border border-bronze/50 bg-bronze/10 px-3 py-1 text-xs font-semibold tracking-wider text-bronze uppercase hover:bg-bronze hover:text-espresso active:scale-95 transition-all shadow-sm"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-bronze/50 bg-bronze/10 px-3 text-xs font-semibold tracking-wider text-bronze uppercase hover:bg-bronze hover:text-espresso active:scale-95 transition-all shadow-sm"
           >
             <Plus className="w-3 h-3" />
             <span>Add</span>

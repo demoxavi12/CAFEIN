@@ -127,7 +127,7 @@ export function GallerySection() {
     <section
       id="gallery"
       aria-labelledby="gallery-title"
-      className="relative bg-espresso py-20 text-ivory sm:py-28 lg:py-32"
+      className="relative bg-espresso py-16 text-ivory sm:py-20 lg:py-24"
     >
       <div className="container-x">
         <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between lg:gap-12">
@@ -143,7 +143,7 @@ export function GallerySection() {
       {pinned ? (
         <div
           ref={sceneRef}
-          className="relative mt-12 sm:mt-16"
+          className="relative mt-8 sm:mt-12"
           style={{ height: `calc(100svh + ${travel}px)` }}
         >
           <div
@@ -182,7 +182,7 @@ export function GallerySection() {
           </div>
         </div>
       ) : (
-        <ul className="container-x mt-10 columns-2 gap-x-2 sm:mt-14 sm:gap-x-3 lg:columns-2 lg:gap-x-8">
+        <ul className="container-x mt-8 columns-2 gap-x-2 sm:mt-10 sm:gap-x-3 lg:columns-2 lg:gap-x-8">
           {gallery.map((item, i) => (
             <GalleryPhoto
               key={item.image.src}

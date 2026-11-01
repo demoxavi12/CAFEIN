@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ImageAsset } from '../data/images'
-import type { MenuCategory } from '../data/menu'
+import { menuItems as canonicalMenuItems, type MenuCategory } from '../data/menu'
+import { getCategoryForMenuSection, getMenuSectionMappings, type MenuSectionMapping } from '../../shared/menu-taxonomy.mjs'
 import {
   AdminApiError,
   checkAdminSession,
@@ -24,6 +25,7 @@ interface Props {
 interface ItemEditorProps {
   item: EnhancedMenuItem
   categories: MenuCategory[]
+  sections: MenuSectionMapping[]
   conflict: boolean
   onSave: (item: EnhancedMenuItem) => Promise<EnhancedMenuItem>
 }
@@ -131,7 +133,7 @@ function PhotoUploadField({
           {progress !== null && (
             <div className="mt-2 flex items-center gap-2">
               <div role="progressbar" aria-label="Photo upload progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} className="h-1 w-28 overflow-hidden rounded-full bg-ivory/15"><div className="h-full bg-bronze transition-[width] duration-150 motion-reduce:transition-none" style={{ width: `${progress}%` }} /></div>
-              <span aria-live="polite" className="text-[10px] tabular-nums text-ivory/55">Uploading {progress}%</span>
+              <span aria-live="polite" className="text-xs tabular-nums text-ivory/65">Uploading {progress}%</span>
             </div>
           )}
           {uploadError && <p role="alert" className="mt-1 max-w-xl text-[10px] leading-relaxed text-red-200">{uploadError}</p>}
@@ -148,7 +150,7 @@ function PhotoUploadField({
   )
 }
 
-function ItemEditor({ item, categories, conflict, onSave }: ItemEditorProps) {
+function ItemEditor({ item, categories, sections, conflict, onSave }: ItemEditorProps) {
   const [draft, setDraft] = useState(item)
   const [baseItem, setBaseItem] = useState(item)
   const [externalChange, setExternalChange] = useState(false)
@@ -180,27 +182,29 @@ function ItemEditor({ item, categories, conflict, onSave }: ItemEditorProps) {
         <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[9px] font-semibold uppercase tracking-wide ${item.isSoldOut ? 'border-red-300/25 bg-red-300/10 text-red-200' : 'border-emerald-300/20 bg-emerald-300/10 text-emerald-200'}`}>{item.isSoldOut ? 'Sold out' : 'In stock'}</span>
       </div>
       {(externalChange || conflict) && <p role="status" className="mb-3 rounded-lg border border-amber-200/20 bg-amber-200/[0.07] px-3 py-2 text-[11px] leading-relaxed text-amber-100">This item changed in another view. Your edits are preserved; reload the latest menu before saving.</p>}
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_6rem_10rem]">
-        <label className="grid gap-1 text-[10px] uppercase tracking-wide text-ivory/50">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_6rem_minmax(10rem,1fr)]">
+        <label className="grid gap-1 text-xs tracking-wide text-ivory/70">
           Item name
           <input value={draft.name} maxLength={80} onChange={(event) => update('name', event.target.value)} className="rounded-lg border border-ivory/15 bg-black/30 px-2.5 py-2 text-sm normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none" />
         </label>
-        <label className="grid gap-1 text-[10px] uppercase tracking-wide text-ivory/50">
+        <label className="grid gap-1 text-xs tracking-wide text-ivory/70">
           Price · ₹
           <input type="number" min="0" max="100000" step="1" value={draft.price} onChange={(event) => update('price', Number(event.target.value))} className="rounded-lg border border-bronze/30 bg-black/30 px-2.5 py-2 text-sm tabular-nums text-bronze focus:border-bronze focus:outline-none" />
         </label>
-        <label className="grid gap-1 text-[10px] uppercase tracking-wide text-ivory/50">
-          Category
-          <select value={draft.category} onChange={(event) => update('category', event.target.value as EnhancedMenuItem['category'])} className="rounded-lg border border-ivory/15 bg-espresso px-2.5 py-2 text-sm normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none">
-            {categories.map((category) => <option key={category.id} value={category.id}>{category.label}</option>)}
+        <label className="grid gap-1 text-xs tracking-wide text-ivory/70">
+          Gourmet section
+          <select value={draft.section} required onChange={(event) => {
+            const section = event.target.value
+            const category = getCategoryForMenuSection(section, sections)
+            if (category) setDraft((current) => ({ ...current, section, category: category as EnhancedMenuItem['category'] }))
+          }} className="rounded-lg border border-ivory/15 bg-espresso px-2.5 py-2 text-sm normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none">
+            {!sections.some((entry) => entry.section === draft.section) && <option value={draft.section}>{draft.section} · choose a configured section</option>}
+            {sections.map(({ section }) => <option key={section} value={section}>{section}</option>)}
           </select>
         </label>
       </div>
-      <label className="mt-2 grid gap-1 text-[10px] uppercase tracking-wide text-ivory/50">
-        Menu section
-        <input value={draft.section} maxLength={80} onChange={(event) => update('section', event.target.value)} className="rounded-lg border border-ivory/15 bg-black/30 px-2.5 py-2 text-xs normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none" />
-      </label>
-      <label className="mt-2 grid gap-1 text-[10px] uppercase tracking-wide text-ivory/50">
+      <p className="mt-2 text-[10px] text-ivory/50">Parent category: <span className="text-ivory/75">{categories.find((category) => category.id === draft.category)?.label || draft.category}</span> · assigned automatically</p>
+      <label className="mt-2 grid gap-1 text-xs tracking-wide text-ivory/70">
         Description
         <textarea value={draft.description || ''} maxLength={500} rows={2} onChange={(event) => update('description', event.target.value)} className="w-full resize-y rounded-lg border border-ivory/15 bg-black/30 p-2.5 text-xs normal-case tracking-normal leading-relaxed text-ivory focus:border-bronze focus:outline-none" />
       </label>
@@ -208,10 +212,10 @@ function ItemEditor({ item, categories, conflict, onSave }: ItemEditorProps) {
         <PhotoUploadField value={draft.image} original={item.image} onChange={(image) => update('image', image ? { ...image, alt: draft.name } : undefined)} onUploadingChange={setPhotoBusy} />
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-ivory/10 pt-3">
-        <button type="button" onClick={() => update('isSoldOut', !draft.isSoldOut)} className={`min-h-11 rounded-full border px-3 text-[10px] font-bold uppercase ${draft.isSoldOut ? 'border-red-500/50 bg-red-500/15 text-red-200' : 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200'}`}>
+        <button type="button" onClick={() => update('isSoldOut', !draft.isSoldOut)} className={`min-h-11 rounded-full border px-3 text-xs font-bold ${draft.isSoldOut ? 'border-red-500/50 bg-red-500/15 text-red-200' : 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200'}`}>
           {draft.isSoldOut ? 'Sold out' : 'In stock'}
         </button>
-        <label className="flex min-h-9 items-center gap-2 text-[10px] text-ivory/55">
+        <label className="flex min-h-11 items-center gap-2 text-xs text-ivory/70">
           Badge
           <select value={draft.badge || ''} onChange={(event) => update('badge', event.target.value || undefined)} className="min-h-11 rounded-lg border border-ivory/15 bg-espresso px-2 py-2 text-[10px] text-ivory focus:border-bronze focus:outline-none focus-visible:ring-2 focus-visible:ring-bronze/60">
             <option value="">None</option>
@@ -219,10 +223,10 @@ function ItemEditor({ item, categories, conflict, onSave }: ItemEditorProps) {
             <option value="Chef Special">Chef Special</option>
           </select>
         </label>
-        <button type="button" disabled={busy || photoBusy || externalChange || conflict || !isDirty} onClick={async () => { setBusy(true); try { const saved = await onSave(draft); setDraft(saved); setBaseItem(saved); setExternalChange(false) } catch { /* Parent displays the request error. */ } finally { setBusy(false) } }} className="btn btn-primary ml-auto min-h-11 px-4 text-[10px] disabled:opacity-50">
+        <button type="button" disabled={busy || photoBusy || externalChange || conflict || !isDirty || !getCategoryForMenuSection(draft.section, sections)} onClick={async () => { setBusy(true); try { const saved = await onSave(draft); setDraft(saved); setBaseItem(saved); setExternalChange(false) } catch { /* Parent displays the request error. */ } finally { setBusy(false) } }} className="btn btn-primary ml-auto min-h-11 px-4 text-[10px] disabled:opacity-50">
           {photoBusy ? 'Uploading photo…' : busy ? 'Saving…' : 'Save changes'}
         </button>
-        <button type="button" disabled title="Use Sanity Studio after editorial review. Deletion is not available in this draft-only manager." className="min-h-11 rounded-lg border border-ivory/10 px-3 text-[10px] text-ivory/40 disabled:opacity-60">
+        <button type="button" disabled title="Use Sanity Studio after editorial review. Deletion is not available in this draft-only manager." className="min-h-11 rounded-lg border border-ivory/10 px-3 text-xs text-ivory/40 disabled:opacity-60">
           Delete in Studio
         </button>
       </div>
@@ -240,7 +244,7 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [newName, setNewName] = useState('')
   const [newPrice, setNewPrice] = useState('')
-  const [newCategory, setNewCategory] = useState('beverages')
+  const [newSection, setNewSection] = useState('')
   const [newDescription, setNewDescription] = useState('')
   const [newImage, setNewImage] = useState<ImageAsset | undefined>()
   const [newPhotoBusy, setNewPhotoBusy] = useState(false)
@@ -253,6 +257,7 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null)
   const onCloseRef = useRef(onClose)
   const { items, categories, loading, error, refresh, saveItem, exportMenu, previewImport, applyImport } = useLiveMenu({ forceLegacy: true, managerMode: isAuthenticated })
+  const sections = useMemo(() => getMenuSectionMappings(canonicalMenuItems, categories), [categories])
 
   useEffect(() => { onCloseRef.current = onClose }, [onClose])
 
@@ -376,14 +381,15 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
     event.preventDefault()
     if (newPhotoBusy) return
     const name = newName.trim()
-    const category = categories.find((entry) => entry.id === newCategory)
+    const categoryId = getCategoryForMenuSection(newSection, sections)
+    const category = categories.find((entry) => entry.id === categoryId)
     const id = name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
     if (!name || !category || !id) {
-      setErrorMsg('Enter an item name and choose a category.')
+      setErrorMsg('Enter an item name and choose a configured Gourmet section.')
       return
     }
     try {
-      await saveItem({ id, name, price: Number(newPrice), category: category.id, section: category.label, description: newDescription.trim(), isSoldOut: false, ...(newImage ? { image: { ...newImage, alt: name } } : {}) })
+      await saveItem({ id, name, price: Number(newPrice), category: category.id, section: newSection, description: newDescription.trim(), isSoldOut: false, ...(newImage ? { image: { ...newImage, alt: name } } : {}) })
       setNewName('')
       setNewPrice('')
       setNewDescription('')
@@ -516,9 +522,9 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
                 <p className="mt-1 text-[11px] text-ivory/55">Changes stay unpublished. Review them before choosing to publish.</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <button type="button" disabled={busy || loading} onClick={() => void handlePublish()} className="min-h-11 rounded-lg border border-bronze/45 bg-bronze/10 px-4 text-[10px] font-semibold text-bronze hover:bg-bronze/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze disabled:opacity-50">Publish approved menu</button>
-                {legacyAvailable && <button type="button" onClick={() => void handleLegacyPreview()} className="min-h-11 rounded-lg border border-bronze/30 px-4 text-[10px] text-bronze hover:border-bronze/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze">Review saved browser edits</button>}
-                <button type="button" onClick={() => void handleLogout()} className="min-h-11 rounded-lg border border-ivory/15 px-4 text-[10px] text-ivory/70 hover:border-ivory/30 hover:text-ivory focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze">Sign out</button>
+                <button type="button" disabled={busy || loading} onClick={() => void handlePublish()} className="min-h-11 rounded-lg border border-bronze/45 bg-bronze/10 px-4 text-xs font-semibold text-bronze hover:bg-bronze/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze disabled:opacity-50">Publish approved menu</button>
+                {legacyAvailable && <button type="button" onClick={() => void handleLegacyPreview()} className="min-h-11 rounded-lg border border-bronze/30 px-4 text-xs text-bronze hover:border-bronze/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze">Review saved browser edits</button>}
+                <button type="button" onClick={() => void handleLogout()} className="min-h-11 rounded-lg border border-ivory/15 px-4 text-xs text-ivory/70 hover:border-ivory/30 hover:text-ivory focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze">Sign out</button>
               </div>
             </div>
 
@@ -528,11 +534,11 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
                 <span aria-hidden="true" className="text-lg leading-none text-bronze transition-transform group-open:rotate-45">+</span>
               </summary>
       <form onSubmit={handleCreate} className="grid max-h-[45dvh] grid-cols-1 gap-3 overflow-y-auto overscroll-contain border-t border-ivory/10 p-4 sm:grid-cols-2 lg:max-h-[42dvh] lg:grid-cols-[1.3fr_7rem_1fr_1.5fr_auto]">
-                <label className="grid gap-1.5 text-[10px] uppercase tracking-wide text-ivory/55">Item name<input value={newName} onChange={(event) => setNewName(event.target.value)} maxLength={80} required placeholder="Item name" className="min-h-11 rounded-lg border border-ivory/15 bg-black/30 px-3 text-sm normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none focus-visible:ring-2 focus-visible:ring-bronze/60" /></label>
-                <label className="grid gap-1.5 text-[10px] uppercase tracking-wide text-ivory/55">Price &#8377;<input type="number" min="0" max="100000" step="1" value={newPrice} onChange={(event) => setNewPrice(event.target.value)} required placeholder="0" className="min-h-11 rounded-lg border border-ivory/15 bg-black/30 px-3 text-sm normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none focus-visible:ring-2 focus-visible:ring-bronze/60" /></label>
-                <label className="grid gap-1.5 text-[10px] uppercase tracking-wide text-ivory/55">Category<select value={newCategory} onChange={(event) => setNewCategory(event.target.value)} className="min-h-11 rounded-lg border border-ivory/15 bg-espresso px-3 text-sm normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none focus-visible:ring-2 focus-visible:ring-bronze/60">{categories.map((category) => <option key={category.id} value={category.id}>{category.label}</option>)}</select></label>
-                <label className="grid gap-1.5 text-[10px] uppercase tracking-wide text-ivory/55">Description<input value={newDescription} onChange={(event) => setNewDescription(event.target.value)} maxLength={500} placeholder="Optional" className="min-h-11 rounded-lg border border-ivory/15 bg-black/30 px-3 text-sm normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none focus-visible:ring-2 focus-visible:ring-bronze/60" /></label>
-                <button type="submit" disabled={newPhotoBusy} className="btn btn-primary min-h-11 self-end px-4 text-[10px] disabled:opacity-50">{newPhotoBusy ? 'Uploading photo...' : 'Add draft'}</button>
+                <label className="grid gap-1.5 text-xs tracking-wide text-ivory/70">Item name<input value={newName} onChange={(event) => setNewName(event.target.value)} maxLength={80} required placeholder="Item name" className="min-h-11 rounded-lg border border-ivory/15 bg-black/30 px-3 text-sm normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none focus-visible:ring-2 focus-visible:ring-bronze/60" /></label>
+                <label className="grid gap-1.5 text-xs tracking-wide text-ivory/70">Price &#8377;<input type="number" min="0" max="100000" step="1" value={newPrice} onChange={(event) => setNewPrice(event.target.value)} required placeholder="0" className="min-h-11 rounded-lg border border-ivory/15 bg-black/30 px-3 text-sm normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none focus-visible:ring-2 focus-visible:ring-bronze/60" /></label>
+                <label className="grid gap-1.5 text-xs tracking-wide text-ivory/70">Gourmet section<select value={newSection} required disabled={!sections.length} onChange={(event) => setNewSection(event.target.value)} className="min-h-11 rounded-lg border border-ivory/15 bg-espresso px-3 text-sm normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none focus-visible:ring-2 focus-visible:ring-bronze/60 disabled:opacity-50"><option value="" disabled>{sections.length ? 'Choose a section' : 'No sections configured'}</option>{sections.map(({ section }) => <option key={section} value={section}>{section}</option>)}</select><span className="text-[10px] text-ivory/45">Parent category: {categories.find((category) => category.id === getCategoryForMenuSection(newSection, sections))?.label || 'Choose a section'}</span></label>
+                <label className="grid gap-1.5 text-xs tracking-wide text-ivory/70">Description<input value={newDescription} onChange={(event) => setNewDescription(event.target.value)} maxLength={500} placeholder="Optional" className="min-h-11 rounded-lg border border-ivory/15 bg-black/30 px-3 text-sm normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none focus-visible:ring-2 focus-visible:ring-bronze/60" /></label>
+                <button type="submit" disabled={newPhotoBusy || !sections.length} className="btn btn-primary min-h-11 self-end px-4 text-xs disabled:opacity-50">{newPhotoBusy ? 'Uploading photo...' : 'Add draft'}</button>
                 <div className="sm:col-span-2 lg:col-span-5"><PhotoUploadField value={newImage} onChange={setNewImage} onUploadingChange={setNewPhotoBusy} /></div>
               </form>
             </details>
@@ -554,7 +560,7 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
             </div>
 
             <div className="grid min-h-0 flex-1 grid-cols-1 content-start gap-3 overflow-y-auto overscroll-contain pr-1 sm:pr-2 lg:grid-cols-2">
-              {loading ? <p className="py-10 text-center text-sm text-ivory/55">Loading menu drafts...</p> : filteredItems.length ? filteredItems.map((item) => <ItemEditor key={`${item.id}:${editorResetVersion}`} item={item} categories={categories} conflict={revisionConflict} onSave={handleSave} />) : <div className="rounded-2xl border border-dashed border-ivory/15 px-5 py-12 text-center"><p className="font-display text-lg text-ivory">No items found</p><p className="mt-2 text-xs text-ivory/55">Try another search or category filter.</p></div>}
+              {loading ? <p className="py-10 text-center text-sm text-ivory/55">Loading menu drafts...</p> : filteredItems.length ? filteredItems.map((item) => <ItemEditor key={`${item.id}:${editorResetVersion}`} item={item} categories={categories} sections={sections} conflict={revisionConflict} onSave={handleSave} />) : <div className="rounded-2xl border border-dashed border-ivory/15 px-5 py-12 text-center"><p className="font-display text-lg text-ivory">No items found</p><p className="mt-2 text-xs text-ivory/55">Try another search or category filter.</p></div>}
             </div>
 
             {pendingPreview && (

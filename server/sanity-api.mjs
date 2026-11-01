@@ -4,6 +4,7 @@ import { createClient } from '@sanity/client'
 import defaultImageUrlBuilder from '@sanity/image-url'
 import { createHash } from 'node:crypto'
 import { MenuStoreError } from './menu-store.mjs'
+import { getCategoryForMenuSection, getMenuSectionMappings } from '../shared/menu-taxonomy.mjs'
 
 const scrypt = promisify(scryptCallback)
 const COOKIE = 'cafein_admin_session'
@@ -225,11 +226,19 @@ function validateCmsItems(items, categories, currentItems = []) {
   })
 }
 
-function validateCmsBackup(payload, categories, currentItems) {
+function validateCmsBackup(payload, categories, currentItems, canonicalItems) {
   if (!payload || payload.schemaVersion !== 1 || !Number.isInteger(payload.revision) || payload.revision < 0 || Object.keys(payload).some((key) => !['schemaVersion', 'revision', 'categories', 'items'].includes(key))) throw new MenuStoreError('Unsupported menu backup.')
+  if (!Array.isArray(payload.items)) throw new MenuStoreError('Backup menu items are invalid.')
   if (!Array.isArray(payload.categories) || payload.categories.length !== categories.length || categories.some((category) => !payload.categories.some((entry) => entry.id === category.id && entry.label === category.label && entry.short === category.short && entry.blurb === category.blurb))) throw new MenuStoreError('This backup has an incompatible category list.')
   const old = new Map(currentItems.map((item) => [item.id, item]))
-  const items = validateCmsItems(payload.items, categories, currentItems)
+  const sectionMappings = getMenuSectionMappings(canonicalItems || [], categories)
+  const normalizedItems = payload.items.map((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) throw new MenuStoreError('Backup menu items are invalid.')
+    const category = getCategoryForMenuSection(item.section, sectionMappings)
+    if (!category) throw new MenuStoreError('A backup item uses an unconfigured Gourmet section.', 400, 'invalid_section')
+    return { ...item, category }
+  })
+  const items = validateCmsItems(normalizedItems, categories, currentItems)
   return items.map((item) => !Object.hasOwn(item, 'image') && old.get(item.id)?.image ? { ...item, image: old.get(item.id).image } : item)
 }
 
@@ -372,8 +381,14 @@ export function createSanityApiHandler({ env = process.env, client = createReadC
           let savedId = id
           const body = await readJson(req)
           savedId = body.id
-          if (!ID.test(body.id || '') || (method === 'PUT' && body.id !== id) || !before.categories.some((category) => category.id === body.category)) throw new MenuStoreError('Item ID or category is invalid.', 400, 'invalid_item')
-          const candidates = method === 'POST' ? [...before.items, body] : before.items.map((item) => item.id === id ? { ...body, id } : item)
+          if (!ID.test(body.id || '') || (method === 'PUT' && body.id !== id)) throw new MenuStoreError('Item ID is invalid.', 400, 'invalid_item')
+          const sectionMappings = getMenuSectionMappings(seed?.items || [], before.categories)
+          const category = getCategoryForMenuSection(body.section, sectionMappings)
+          if (!category) throw new MenuStoreError('Choose a configured Gourmet section.', 400, 'invalid_section')
+          // The section is the manager's choice; the parent category is always
+          // derived server-side, regardless of any category value in the request.
+          const normalizedBody = { ...body, category }
+          const candidates = method === 'POST' ? [...before.items, normalizedBody] : before.items.map((item) => item.id === id ? { ...normalizedBody, id } : item)
           const validated = validateCmsItems(candidates, before.categories, before.items)
           const item = validated.find((entry) => entry.id === body.id)
           const document = documentFromItem(item)
@@ -388,7 +403,7 @@ export function createSanityApiHandler({ env = process.env, client = createReadC
         if (path === '/api/admin/import/preview' && method === 'POST') {
           const backup = await readJson(req)
           const current = await snapshot('drafts') || { revision: 1, categories: seed?.categories || [], items: seed?.items || [] }
-          const imported = validateCmsBackup(backup, current.categories, current.items)
+          const imported = validateCmsBackup(backup, current.categories, current.items, seed?.items)
           const next = new Map(imported.items.map((item) => [item.id, item]))
           const currentById = new Map(current.items.map((item) => [item.id, item]))
           send(res, 200, { baseRevision: current.revision, added: imported.items.filter((item) => !currentById.has(item.id)).map((item) => item.id), updated: imported.items.filter((item) => currentById.has(item.id) && JSON.stringify(item) !== JSON.stringify(currentById.get(item.id))).map((item) => item.id), removed: current.items.filter((item) => !next.has(item.id)).map((item) => item.id), itemCount: imported.items.length }, headers)
@@ -399,7 +414,7 @@ export function createSanityApiHandler({ env = process.env, client = createReadC
           if (body.confirmReplace !== true) throw new MenuStoreError('Confirm the backup before applying it.', 400, 'confirmation_required')
           const current = await snapshot('drafts') || { revision: 1, categories: seed?.categories || [], items: seed?.items || [] }
           if (Number(String(req.headers['if-match'] || '').replaceAll('"', '')) !== current.revision) throw new MenuStoreError('The menu changed in another session.', 409, 'revision_conflict')
-          const imported = validateCmsBackup(body.backup, current.categories, current.items)
+          const imported = validateCmsBackup(body.backup, current.categories, current.items, seed?.items)
           const removed = current.items.filter((item) => !imported.some((next) => next.id === item.id))
           if (removed.length) throw new MenuStoreError('This backup removes existing items. Apply those removals individually from the manager after reviewing their live effects; no backup changes were applied.', 409, 'draft_removal_requires_review')
           const existingDrafts = await admin.withConfig({ perspective: 'raw', useCdn: false }).fetch('*[_type == "menuItem" && _id in path("drafts.**")]{_id,_rev,id}')

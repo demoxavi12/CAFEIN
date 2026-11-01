@@ -13,9 +13,9 @@ export function Footer() {
   const hasContact = Boolean(business.address || business.phone || business.email)
 
   return (
-    <footer className="relative bg-espresso pt-20 pb-10">
+    <footer className="relative bg-espresso pt-14 pb-8 sm:pt-16 sm:pb-10">
       <div className="container-x">
-        <div className="grid gap-14 border-b border-ivory/10 pb-14 lg:grid-cols-12">
+        <div className="grid gap-10 border-b border-ivory/10 pb-10 sm:gap-12 sm:pb-12 lg:grid-cols-12">
           <div className="flex items-center gap-6 lg:col-span-5">
             {/* Original Cafe In logo, shown as a round medallion */}
             <img

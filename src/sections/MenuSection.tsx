@@ -29,7 +29,7 @@ export function MenuSection({ onSelect }: Props) {
     <section
       id="menu"
       aria-labelledby="menu-title"
-      className="relative bg-espresso py-20 sm:py-28 lg:py-36"
+      className="relative bg-espresso py-16 sm:py-20 lg:py-24"
     >
       <div className="container-x">
         <div className="grid gap-8 lg:grid-cols-12 lg:items-end">
@@ -42,7 +42,7 @@ export function MenuSection({ onSelect }: Props) {
           />
         </div>
 
-        <div className="mt-10 grid grid-cols-1 gap-4 min-[380px]:grid-cols-2 sm:mt-14 sm:gap-5 lg:grid-cols-3 lg:gap-6">
+        <div className="mt-8 grid grid-cols-1 gap-4 min-[380px]:grid-cols-2 sm:mt-10 sm:gap-5 lg:grid-cols-3 lg:gap-6">
           {loading ? (
             <p role="status" className="col-span-full py-8 text-center text-sm text-ivory/55">Loading the current menu…</p>
           ) : error ? (
@@ -72,7 +72,7 @@ export function MenuSection({ onSelect }: Props) {
           ))}
         </div>
 
-        <div className="mt-9 flex justify-center sm:mt-12">
+        <div className="mt-8 flex justify-center sm:mt-10">
           <a
             href="/menu"
             className="btn btn-ghost group min-h-12 px-5 text-[0.72rem] sm:text-[0.78rem]"
@@ -86,8 +86,6 @@ export function MenuSection({ onSelect }: Props) {
             </span>
           </a>
         </div>
-
-        <div className="mt-12 flex flex-col gap-2 border-t border-ivory/15 pt-5 text-xs leading-relaxed text-ivory/60 sm:flex-row sm:justify-between"></div>
       </div>
     </section>
   );

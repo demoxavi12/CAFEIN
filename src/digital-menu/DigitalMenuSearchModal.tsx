@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { EnhancedMenuItem } from './adminStore'
 import { MenuDishCard } from './MenuDishCard'
+import { trapTab } from '../lib/focusTrap'
 
 interface Props {
   isOpen: boolean
@@ -22,6 +23,36 @@ export function DigitalMenuSearchModal({
   onRemove,
 }: Props) {
   const [query, setQuery] = useState('')
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const onCloseRef = useRef(onClose)
+
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const desktopInput = window.matchMedia('(hover: hover) and (pointer: fine)').matches
+    const focusFrame = window.requestAnimationFrame(() => {
+      if (desktopInput) searchInputRef.current?.focus()
+      else dialogRef.current?.focus()
+    })
+    const handleWindowKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation()
+        onCloseRef.current()
+      }
+    }
+    window.addEventListener('keydown', handleWindowKeyDown)
+    return () => {
+      window.cancelAnimationFrame(focusFrame)
+      window.removeEventListener('keydown', handleWindowKeyDown)
+      previousFocus?.focus()
+    }
+  }, [isOpen])
 
   if (!isOpen) return null
 
@@ -36,25 +67,44 @@ export function DigitalMenuSearchModal({
       )
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md">
-      <div className="relative mt-8 w-full max-w-xl max-h-[85vh] overflow-hidden rounded-3xl border border-ivory/15 bg-espresso-2 p-5 shadow-2xl flex flex-col text-ivory">
+      <div className="fixed inset-0 z-50 flex items-start justify-center overscroll-contain bg-black/80 p-3 backdrop-blur-md sm:p-6" onClick={onClose}>
+        <div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Search the menu"
+          tabIndex={-1}
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.stopPropagation()
+              onCloseRef.current()
+            } else {
+              trapTab(dialogRef.current, event)
+            }
+          }}
+          className="relative mt-8 flex max-h-[85vh] w-full max-w-xl flex-col overflow-hidden rounded-3xl border border-ivory/15 bg-espresso-2 p-5 text-ivory shadow-2xl"
+        >
         {/* Search Input Bar */}
         <div className="flex items-center gap-2 border-b border-ivory/10 pb-3">
           <svg className="h-5 w-5 text-bronze shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
           </svg>
           <input
+            ref={searchInputRef}
             type="search"
+            name="menu-search"
+            aria-label="Search menu items"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search coffee, pasta, sandwiches, cheesecakes..."
+            placeholder="Search coffee, pasta, sandwiches, cheesecakes…"
             className="w-full bg-transparent text-sm sm:text-base text-ivory placeholder:text-ivory/40 focus:outline-none"
-            autoFocus
           />
           <button
             type="button"
             onClick={onClose}
-            className="flex h-7 w-7 items-center justify-center rounded-full bg-ivory/10 text-ivory/70 hover:bg-ivory/20 transition-colors text-xs"
+            aria-label="Close menu search"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-ivory/10 text-ivory/70 transition-colors hover:bg-ivory/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze"
           >
             ✕
           </button>
@@ -101,7 +151,7 @@ export function DigitalMenuSearchModal({
             ))
           )}
         </div>
+        </div>
       </div>
-    </div>
   )
 }

@@ -25,7 +25,7 @@ export function AboutSection() {
   const transition = reduceMotion ? { duration: 0 } : { duration: 0.45, ease: EASE_OUT }
 
   return (
-    <section id="story" aria-labelledby="story-title" className="relative overflow-hidden bg-[#211813] py-20 text-[#F7F3EB] sm:py-28 lg:py-36">
+    <section id="story" aria-labelledby="story-title" className="relative overflow-hidden bg-[#211813] py-16 text-[#F7F3EB] sm:py-20 lg:py-24">
       <div className="container-x">
         <SectionHeading
           id="story-title"
@@ -35,7 +35,7 @@ export function AboutSection() {
           className="max-w-4xl"
         />
 
-        <div className="mt-12 grid gap-10 sm:mt-16 md:grid-cols-12 md:items-start md:gap-8 lg:mt-20 lg:gap-12">
+        <div className="mt-8 grid gap-8 sm:mt-10 md:grid-cols-12 md:items-start md:gap-8 lg:mt-12 lg:gap-12">
           <motion.p
             initial={reduceMotion ? false : { opacity: 0, y: 16 }}
             whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }}
@@ -98,7 +98,7 @@ export function AboutSection() {
               })}
             </div>
 
-            <div className="mt-8 min-h-40 sm:mt-10 sm:min-h-36" id="story-chapter-panel" aria-live="polite" aria-atomic="true">
+            <div className="mt-6 min-h-32 sm:mt-8 sm:min-h-28" id="story-chapter-panel" aria-live="polite" aria-atomic="true">
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
                   key={activeChapter}
@@ -123,7 +123,7 @@ export function AboutSection() {
           whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ ...transition, duration: reduceMotion ? 0 : 0.7 }}
-          className="display mt-16 text-center text-[clamp(2rem,5vw,3.6rem)] italic text-[#F7F3EB] sm:mt-24"
+          className="display mt-12 text-center text-[clamp(2rem,5vw,3.6rem)] italic text-[#F7F3EB] sm:mt-16"
         >
           Brew it. Love it. Live it!
         </motion.p>

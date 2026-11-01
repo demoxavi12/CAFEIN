@@ -147,7 +147,7 @@ export function DigitalMenuDetailSheet({
           <button
             type="button"
             onClick={onClose}
-            className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-ivory/10 text-ivory hover:bg-ivory/20 active:scale-90 transition-all z-20"
+            className="absolute top-4 right-4 z-20 flex h-11 w-11 items-center justify-center rounded-full bg-ivory/10 text-ivory transition-colors hover:bg-ivory/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze active:scale-95"
             aria-label="Close details"
           >
             <X className="w-4 h-4" />
@@ -284,7 +284,7 @@ export function DigitalMenuDetailSheet({
                 <button
                   type="button"
                   onClick={() => onRemove(item.id)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-espresso text-ivory font-bold hover:bg-bronze hover:text-espresso transition-colors active:scale-90"
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-espresso text-ivory font-bold hover:bg-bronze hover:text-espresso transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze active:scale-95"
                   aria-label="Decrease"
                 >
                   <Minus className="w-3.5 h-3.5" />
@@ -295,7 +295,7 @@ export function DigitalMenuDetailSheet({
                 <button
                   type="button"
                   onClick={() => onAdd(item.id)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-bronze text-espresso font-bold hover:brightness-110 transition-colors active:scale-90"
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-bronze text-espresso font-bold hover:brightness-110 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze active:scale-95"
                   aria-label="Increase"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -305,7 +305,7 @@ export function DigitalMenuDetailSheet({
               <button
                 type="button"
                 onClick={() => onAdd(item.id)}
-                className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-bronze to-bronze-light px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-espresso shadow-lg hover:brightness-105 active:scale-95 transition-all"
+                className="inline-flex min-h-12 items-center gap-2 rounded-full bg-bronze px-6 text-xs font-bold uppercase tracking-wider text-espresso transition-[filter,transform] hover:brightness-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bronze active:scale-95"
               >
                 <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                 <span>Add to Table Order</span>

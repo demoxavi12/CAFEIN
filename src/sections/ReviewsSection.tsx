@@ -165,8 +165,8 @@ export function ReviewsSection() {
   }, [motionPaused, pageCount, reviewsPerPage])
 
   return (
-    <section id="reviews" aria-labelledby="reviews-title" className="relative overflow-hidden bg-mocha py-24 sm:py-32 lg:py-40">
-      <div className="container-x grid gap-12 lg:grid-cols-12 lg:items-start lg:gap-8">
+    <section id="reviews" aria-labelledby="reviews-title" className="relative overflow-hidden bg-mocha py-16 sm:py-20 lg:py-24">
+      <div className="container-x grid gap-8 lg:grid-cols-12 lg:items-start lg:gap-8">
         <div className="lg:col-span-4">
           <motion.h2
             id="reviews-title"
@@ -198,7 +198,7 @@ export function ReviewsSection() {
             <ArrowUpRight aria-hidden="true" size={16} strokeWidth={1.7} />
           </a>
 
-          <div className="mt-12 text-sm text-ivory/65">
+          <div className="mt-8 text-sm text-ivory/65">
             {reviewScreenshots.length} screenshots in this collection
           </div>
         </div>
@@ -223,7 +223,7 @@ export function ReviewsSection() {
             <motion.div
               key={compositionKey}
               id="review-screenshot-grid"
-              className="grid grid-cols-1 items-start gap-5 sm:grid-cols-2 sm:gap-4 lg:grid-cols-12 lg:gap-x-5 lg:gap-y-7"
+              className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 sm:gap-4 lg:grid-cols-12 lg:gap-x-5 lg:gap-y-6"
               initial={reduceMotion ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{
@@ -245,7 +245,7 @@ export function ReviewsSection() {
             </motion.div>
           </AnimatePresence>
 
-          <div className="mt-8 flex flex-wrap items-center justify-between gap-5 sm:mt-10">
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-4 sm:mt-8">
             <p className="text-sm tabular-nums text-ivory/70" aria-live="polite" aria-atomic="true">
               Showing {start + 1}–{end} of {reviewScreenshots.length}
             </p>

@@ -50,7 +50,7 @@ export function ConceptRailCarousel({
               key={g.section}
               type="button"
               onClick={() => scrollToSection(g.section)}
-              className="shrink-0 rounded-full border border-ivory/15 bg-ivory/5 px-3 py-1 text-[11px] font-medium tracking-wide text-ivory/80 hover:border-bronze hover:text-bronze active:scale-95 transition-all"
+              className="min-h-11 shrink-0 rounded-full border border-ivory/15 bg-ivory/5 px-3 py-1 text-xs font-medium tracking-wide text-ivory/80 transition-colors hover:border-bronze hover:text-bronze active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze"
             >
               {g.section}
             </button>

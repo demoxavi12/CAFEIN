@@ -25,12 +25,12 @@ export function VisitUsSection() {
   const reduceMotion = useReducedMotion()
 
   return (
-    <section id="visit" aria-labelledby="visit-title" className="relative overflow-hidden bg-espresso-2 py-24 sm:py-32 lg:py-40">
-      <div className="container-x grid gap-14 lg:grid-cols-12 lg:gap-8">
+    <section id="visit" aria-labelledby="visit-title" className="relative overflow-hidden bg-espresso-2 py-16 sm:py-20 lg:py-24">
+      <div className="container-x grid gap-10 lg:grid-cols-12 lg:gap-8">
         <div className="lg:col-span-5">
           <SectionHeading id="visit-title" eyebrow="Visit Us" title="Pull up" italic="a chair." />
           <motion.dl
-            className="mt-12"
+            className="mt-8"
             initial={reduceMotion ? false : { opacity: 0, y: 24 }}
             whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }}
             viewport={{ once: true }}
@@ -88,7 +88,7 @@ export function VisitUsSection() {
         </div>
 
         <motion.div
-          className="relative min-h-[380px] overflow-hidden lg:col-span-6 lg:col-start-7 lg:min-h-[560px]"
+          className="relative min-h-[320px] overflow-hidden lg:col-span-6 lg:col-start-7 lg:min-h-[440px]"
           initial={reduceMotion ? false : { opacity: 0.96 }}
           whileInView={reduceMotion ? undefined : { opacity: 1 }}
           viewport={{ once: true, margin: '0px 0px -10% 0px' }}

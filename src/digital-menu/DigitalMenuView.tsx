@@ -57,6 +57,10 @@ export function DigitalMenuView({ onExitMenu }: Props) {
         setTableNumber={setTableNumber}
       />
 
+      <div className="mx-auto w-full max-w-5xl px-3 pt-4 sm:px-6 sm:pt-5">
+        <h1 className="font-display text-2xl leading-tight text-ivory sm:text-3xl">In-Café Menu</h1>
+      </div>
+
       {draftPreview && (
         <div role={previewError ? 'alert' : 'status'} className="mx-auto mt-3 w-full max-w-5xl px-3 sm:px-6">
           <div className={`rounded-xl border px-4 py-3 text-sm ${previewError ? 'border-amber-300/40 bg-amber-950/50 text-amber-100' : 'border-bronze/30 bg-espresso-2 text-ivory-2'}`}>
@@ -71,42 +75,50 @@ export function DigitalMenuView({ onExitMenu }: Props) {
 
       {/* Atmosphere Reel Teaser Banner */}
       <div className="w-full max-w-5xl mx-auto px-3 pt-3 sm:px-6">
-        <div
+        <button
+          type="button"
           onClick={() => setIsAtmosphereOpen(true)}
-          className="group relative cursor-pointer overflow-hidden rounded-2xl border border-ivory/12 bg-gradient-to-r from-mocha via-espresso-2 to-mocha p-3 sm:p-3.5 shadow-lg transition-all duration-300 hover:border-bronze/50 hover:shadow-bronze/10 flex items-center justify-between gap-3"
-          role="button"
-          tabIndex={0}
+          aria-label="Play the Cafe In atmosphere video"
+          className="group relative flex w-full items-center justify-between gap-3 overflow-hidden rounded-2xl border border-ivory/12 bg-gradient-to-r from-mocha via-espresso-2 to-mocha p-2.5 text-left shadow-lg transition-all duration-300 hover:border-bronze/50 hover:shadow-bronze/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bronze sm:p-3"
         >
-          <div className="flex items-center gap-3">
-            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-bronze/20 text-bronze border border-bronze/40 group-hover:bg-bronze group-hover:text-espresso transition-colors">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-bronze/20 text-bronze border border-bronze/40 group-hover:bg-bronze group-hover:text-espresso transition-colors">
               <Play className="h-4 w-4 fill-current ml-0.5" />
               <span className="absolute -inset-1 rounded-xl border border-bronze/30 animate-pulse pointer-events-none" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] uppercase font-mono tracking-widest text-bronze font-bold flex items-center gap-1">
-                  <Sparkles className="w-2.5 h-2.5" />
+                <span className="text-[11px] uppercase font-mono tracking-widest text-bronze font-bold flex items-center gap-1">
+                  <Sparkles aria-hidden="true" className="w-3 h-3" />
                   <span>Cafe In Experience</span>
                 </span>
-                <span className="rounded-full bg-emerald-500/20 px-1.5 py-0.2 text-[9px] font-mono text-emerald-300 border border-emerald-500/30">
+                <span className="rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-mono text-emerald-300 border border-emerald-500/30">
                   Video Reel
                 </span>
               </div>
-              <p className="font-display text-sm sm:text-base text-ivory">
+              <p className="truncate font-display text-sm sm:text-base text-ivory">
                 Watch our in-café atmosphere & interior video
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-bronze group-hover:text-ivory transition-colors shrink-0">
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-bronze group-hover:text-ivory transition-colors shrink-0">
             <span className="hidden sm:inline">Play Reel</span>
             <span className="text-sm">→</span>
-          </div>
-        </div>
+          </span>
+        </button>
       </div>
 
       {/* Main Presentation Body */}
       <main className="flex-1 w-full max-w-5xl mx-auto">
+        {!menuLoading && !menuError && items.length > 0 && (
+          <p className="mx-3 mt-3 flex items-center gap-2 text-xs text-ivory/65 sm:mx-6">
+            <span aria-hidden="true" className="flex h-4 w-4 items-center justify-center rounded border border-emerald-500/80 bg-emerald-950/40 p-0.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            </span>
+            Vegetarian
+          </p>
+        )}
         {menuLoading ? (
           <p role="status" className="px-5 py-16 text-center text-sm text-ivory/60">Loading the current menu…</p>
         ) : menuError ? (
@@ -135,7 +147,7 @@ export function DigitalMenuView({ onExitMenu }: Props) {
 
       {/* In-Café Footer */}
       <footer className="mt-8 border-t border-ivory/10 px-4 py-8 text-center text-xs text-ivory/50 flex flex-col items-center gap-3">
-        <p className="font-mono text-[11px] text-bronze uppercase tracking-widest">
+        <p className="font-mono text-xs text-bronze uppercase tracking-widest">
           Cafe In • Coffee • Vibes • Memories
         </p>
         <p className="max-w-xs text-ivory/40 text-[11px] leading-relaxed">

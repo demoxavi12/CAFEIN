@@ -85,7 +85,7 @@ export function ConceptDeckCarousel({
                   setOnlyPhotos(false)
                   if (carouselRef.current) carouselRef.current.scrollLeft = 0
                 }}
-                className={`relative flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
+                className={`relative flex min-h-11 shrink-0 items-center gap-2 rounded-full px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
                   isCur ? 'text-espresso shadow-lg' : 'bg-ivory/8 text-ivory/70 hover:bg-ivory/15 hover:text-ivory'
                 }`}
               >
@@ -115,13 +115,13 @@ export function ConceptDeckCarousel({
         </p>
 
         {/* Sub-Section Filter Chips + Photo Filter Toggle */}
-        <div className="no-scrollbar mt-3 flex items-center gap-2 overflow-x-auto pb-1">
+        <div className="no-scrollbar mt-5 flex items-center gap-2 overflow-x-auto pb-1">
           {/* Photos only filter pill */}
           {categoryPhotoCount > 0 && (
             <button
               type="button"
               onClick={() => setOnlyPhotos((p) => !p)}
-              className={`shrink-0 flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold transition-all ${
+              className={`shrink-0 flex min-h-10 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-all ${
                 onlyPhotos
                   ? 'border-amber-400 bg-amber-400/20 text-amber-200'
                   : 'border-ivory/15 bg-ivory/5 text-ivory/70 hover:border-ivory/30'
@@ -134,7 +134,7 @@ export function ConceptDeckCarousel({
 
           {availableSections.length > 2 && (
             <>
-              <span className="text-[10px] uppercase font-mono tracking-wider text-ivory/40 mr-0.5 shrink-0">
+              <span className="mr-0.5 shrink-0 text-xs font-medium text-ivory/65">
                 Sections:
               </span>
               {availableSections.map((sec) => {
@@ -148,7 +148,7 @@ export function ConceptDeckCarousel({
                       setOnlyPhotos(false)
                       if (carouselRef.current) carouselRef.current.scrollLeft = 0
                     }}
-                    className={`shrink-0 rounded-full border px-3 py-1 text-[11px] font-medium transition-all ${
+                    className={`min-h-11 shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                       active
                         ? 'border-bronze bg-bronze/15 text-bronze font-bold'
                         : 'border-ivory/10 bg-ivory/5 text-ivory/70 hover:border-ivory/30'
@@ -176,7 +176,7 @@ export function ConceptDeckCarousel({
             <button
               type="button"
               onClick={() => setLayoutMode('carousel')}
-              className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-all ${
+              className={`flex min-h-11 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
                 layoutMode === 'carousel'
                   ? 'bg-bronze text-espresso font-bold'
                   : 'text-ivory/60 hover:text-ivory'
@@ -189,7 +189,7 @@ export function ConceptDeckCarousel({
             <button
               type="button"
               onClick={() => setLayoutMode('grid')}
-              className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-all ${
+              className={`flex min-h-11 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
                 layoutMode === 'grid'
                   ? 'bg-bronze text-espresso font-bold'
                   : 'text-ivory/60 hover:text-ivory'
@@ -201,27 +201,6 @@ export function ConceptDeckCarousel({
             </button>
           </div>
 
-          {/* Carousel Arrows (only in carousel view) */}
-          {layoutMode === 'carousel' && (
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => scrollByCard('left')}
-                className="flex h-7 w-7 items-center justify-center rounded-full border border-ivory/15 bg-ivory/5 text-ivory/80 hover:bg-ivory/20 active:scale-95 transition-all"
-                aria-label="Scroll left"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollByCard('right')}
-                className="flex h-7 w-7 items-center justify-center rounded-full border border-ivory/15 bg-ivory/5 text-ivory/80 hover:bg-ivory/20 active:scale-95 transition-all"
-                aria-label="Scroll right"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          )}
         </div>
       </div>
 
@@ -271,8 +250,27 @@ export function ConceptDeckCarousel({
             </AnimatePresence>
           </div>
 
+          <div className="mt-2 flex items-center justify-center gap-3" aria-label="Menu carousel controls">
+            <button
+              type="button"
+              onClick={() => scrollByCard('left')}
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-ivory/15 bg-ivory/5 text-ivory/80 transition-colors hover:bg-ivory/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bronze active:scale-95"
+              aria-label="Scroll menu items left"
+            >
+              <ChevronLeft aria-hidden="true" className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollByCard('right')}
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-ivory/15 bg-ivory/5 text-ivory/80 transition-colors hover:bg-ivory/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bronze active:scale-95"
+              aria-label="Scroll menu items right"
+            >
+              <ChevronRight aria-hidden="true" className="h-5 w-5" />
+            </button>
+          </div>
+
           {/* Swipe Hint */}
-          <div className="mt-2 flex items-center justify-center gap-1 text-[11px] text-ivory/40">
+          <div className="mt-2 flex items-center justify-center gap-1 text-xs text-ivory/50">
             <span>← Swipe horizontally to explore dishes →</span>
           </div>
         </>
@@ -295,6 +293,7 @@ export function ConceptDeckCarousel({
                   onAdd={onAdd}
                   onRemove={onRemove}
                   compact={false}
+                  equalHeight
                 />
               </motion.div>
             ))}

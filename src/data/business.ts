@@ -43,7 +43,7 @@ export const business: BusinessInfo = {
   },
   address: "Near ICICI Bank, Nabarangpur, Odisha 764059",
   mapEmbedUrl:
-    "https://maps.google.com/maps?q=19.2197471,82.5474848&z=18&output=embed",
+    "https://maps.google.com/maps?q=Cafein,+Nabarangpur,+Odisha&ll=19.2197471,82.5474848&z=18&output=embed",
 
   directionsUrl:
     "https://www.google.com/maps/place/Cafein/@19.2200316,82.5466146,197m/data=!3m1!1e3!4m14!1m7!3m6!1s0x3a3ab99a6b9a9057:0xda492166d46e1e29!2sCafein!8m2!3d19.2197471!4d82.5474848!16s%2Fg%2F11zcxnknrd!3m5!1s0x3a3ab99a6b9a9057:0xda492166d46e1e29!8m2!3d19.2197471!4d82.5474848!16s%2Fg%2F11zcxnknrd?hl=en-US&entry=ttu",

@@ -12,10 +12,10 @@ interface Props {
 const featuredMenuIds = [
   "biscoff-cheesecake",
   "alfredo-penne",
-  "pistachio-latte",
+  "corn-cheese-sandwich",
   "vietnamese-iced-coffee",
   "burger-aloo-tikki",
-  "greek-salad",
+  "caesar-salad",
 ];
 
 export function MenuSection({ onSelect }: Props) {
@@ -36,8 +36,7 @@ export function MenuSection({ onSelect }: Props) {
           <SectionHeading
             id="menu-title"
             eyebrow="The Menu"
-            title="Poured, pressed"
-            italic="& plated."
+            title="Come find your new favourite"
             className="lg:col-span-7"
           />
         </div>

@@ -10,7 +10,16 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600&family=DM+Sans:wght@400;500;600&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
-    <link rel="preload" as="image" href="/images/interior-lantern-pendant.webp" />
+    <link rel="preload" as="image" href="/images/optimized/logo-svg-medallion.webp" fetchpriority="high" />
+    <link
+      rel="preload"
+      as="image"
+      type="image/webp"
+      imagesrcset="/images/optimized/sitiing-768.webp 768w, /images/optimized/sitiing-1280.webp 1280w, /images/optimized/sitiing-1920.webp 1920w"
+      imagesizes="(min-width: 1280px) 55vw, (min-width: 768px) 70vw, 95vw"
+      fetchpriority="high"
+    />
+    <link rel="preload" as="video" href="/videos/intro-1.mp4" type="video/mp4" />
   </head>
   <body>
     <div id="root"></div>

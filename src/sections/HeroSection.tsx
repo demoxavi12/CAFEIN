@@ -135,16 +135,26 @@ export function HeroSection() {
               }
               transition={{ duration: 0.95, ease: EASE_CINEMA, delay: reduceMotion ? 0 : 0.08 }}
             >
-              <motion.img
-                src="/images/sitiing.jpeg"
-                alt="Cafe In's dining room, with its botanical mural, pendant lights, wooden tables and emerald chairs"
-                width={4096}
-                height={1864}
-                fetchPriority="high"
-                decoding="async"
-                className="frame-img"
-                style={{ x: pointerX, y: pointerY, scale: mainScale, objectPosition: "48% 54%" }}
-              />
+              <motion.picture
+                className="absolute inset-0 block h-full w-full"
+                style={{ x: pointerX, y: pointerY, scale: mainScale }}
+              >
+                <source
+                  type="image/webp"
+                  srcSet="/images/optimized/sitiing-768.webp 768w, /images/optimized/sitiing-1280.webp 1280w, /images/optimized/sitiing-1920.webp 1920w"
+                  sizes="(min-width: 1280px) 55vw, (min-width: 768px) 70vw, 95vw"
+                />
+                <motion.img
+                  src="/images/sitiing.jpeg"
+                  alt="Cafe In's dining room, with its botanical mural, pendant lights, wooden tables and emerald chairs"
+                  width={4096}
+                  height={1864}
+                  fetchPriority="high"
+                  decoding="async"
+                  className="frame-img"
+                  style={{ objectPosition: "48% 54%" }}
+                />
+              </motion.picture>
             </motion.div>
           </motion.figure>
 

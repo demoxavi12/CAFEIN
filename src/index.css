@@ -369,6 +369,9 @@
     object-position: center;
     background: var(--color-espresso);
   }
+  .cafe-film-preload {
+    pointer-events: none;
+  }
   .cafe-film-grade {
     background:
       linear-gradient(180deg, rgba(23, 19, 15, 0.24), rgba(23, 19, 15, 0.08) 46%, rgba(23, 19, 15, 0.42)),
@@ -407,6 +410,9 @@
     overflow: hidden;
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
+    background:
+      radial-gradient(ellipse at 50% 35%, rgba(176, 119, 63, 0.16), transparent 62%),
+      linear-gradient(145deg, #30231e, #211813 72%);
   }
   .cafe-photo-tile-back {
     background: var(--color-mocha);

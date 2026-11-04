@@ -26,10 +26,10 @@ type IntroPhase =
   | "COMPLETE";
 
 const CLIPS = [
-  { src: "/videos/intro-1.mp4", duration: 1020 },
-  { src: "/videos/intro-2.mp4", duration: 1740 },
-  { src: "/videos/intro-3.mp4", duration: 3080 },
-  { src: "/videos/intro-4.mp4", duration: 1660 },
+  { src: "/videos/intro-1.mp4" },
+  { src: "/videos/intro-2.mp4" },
+  { src: "/videos/intro-3.mp4" },
+  { src: "/videos/intro-4.mp4" },
 ];
 
 // Only genuine local Cafe In photographs. menu-1/menu-2 and logo artwork are excluded.
@@ -81,6 +81,36 @@ const TILT = [-2.4, 1.8, -1.3, 1.2, -0.7, 2.1, -1.8, 1.4, -2.2];
 const FLIP_INTERVALS = [448, 366, 295, 242, 195, 153, 124, 100];
 const CLEARANCE_SECONDS = 0.42;
 const LOGO_HOLD_SECONDS = 0.95;
+const VIDEO_LOAD_TIMEOUT_MS = 10_000;
+const VIDEO_STALL_TIMEOUT_MS = 7_000;
+const NEXT_VIDEO_TIMEOUT_MS = 7_000;
+
+function preloadPhoto(src: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const image = new Image();
+    let settled = false;
+    const timeout = window.setTimeout(() => finish(false), 6_000);
+    const finish = (loaded: boolean) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeout);
+      resolve(loaded);
+    };
+
+    image.decoding = "async";
+    image.fetchPriority = "low";
+    image.onload = () => {
+      if (typeof image.decode === "function") {
+        void image.decode().then(() => finish(true)).catch(() => finish(false));
+      } else {
+        finish(true);
+      }
+    };
+    image.onerror = () => finish(false);
+    image.src = src;
+    if (image.complete && image.naturalWidth > 0) finish(true);
+  });
+}
 
 export function IntroAnimation({ onReveal, onDone }: Props) {
   const reduce = useReducedMotion();
@@ -88,11 +118,20 @@ export function IntroAnimation({ onReveal, onDone }: Props) {
   const [visible, setVisible] = useState(true);
   const [skipping, setSkipping] = useState(false);
   const [clipIndex, setClipIndex] = useState(0);
+  const [startedClipIndex, setStartedClipIndex] = useState(-1);
+  const [hasStartedVideo, setHasStartedVideo] = useState(false);
+  const [waitingForClip, setWaitingForClip] = useState<number | null>(null);
+  const [stalledClipIndex, setStalledClipIndex] = useState(-1);
   const [tileCount, setTileCount] = useState(3);
   const [flip, setFlip] = useState(0);
   const [failed, setFailed] = useState<Set<string>>(() => new Set());
   const phaseRef = useRef<IntroPhase>("VIDEO_INTRO");
-  const clipAdvanced = useRef(-1);
+  const activeClipIndex = useRef(0);
+  const attemptedPlayIndex = useRef(-1);
+  const readyPreloadIndex = useRef(-1);
+  const failedPreloads = useRef(new Set<number>());
+  const waitingForClipRef = useRef<number | null>(null);
+  const activeVideoRef = useRef<HTMLVideoElement | null>(null);
   const handoffStarted = useRef(false);
   const skipRef = useRef<HTMLButtonElement>(null);
 
@@ -122,12 +161,21 @@ export function IntroAnimation({ onReveal, onDone }: Props) {
   }, [onReveal, transition]);
 
   const advanceClip = useCallback(
-    (index: number) => {
-      if (phaseRef.current !== "VIDEO_INTRO" || clipAdvanced.current === index)
-        return;
-      clipAdvanced.current = index;
-      if (index < CLIPS.length - 1) setClipIndex(index + 1);
-      else {
+    (index: number, skipFollowingClip = false) => {
+      if (
+        phaseRef.current !== "VIDEO_INTRO" ||
+        activeClipIndex.current !== index
+      ) return;
+
+      const nextIndex = index + (skipFollowingClip ? 2 : 1);
+      waitingForClipRef.current = null;
+      setWaitingForClip(null);
+      setStalledClipIndex(-1);
+      if (nextIndex < CLIPS.length) {
+        activeClipIndex.current = nextIndex;
+        attemptedPlayIndex.current = -1;
+        setClipIndex(nextIndex);
+      } else {
         setTileCount(3);
         setFlip(0);
         transition("VIDEO_INTRO", "PHOTO_WALL");
@@ -135,6 +183,38 @@ export function IntroAnimation({ onReveal, onDone }: Props) {
     },
     [transition],
   );
+
+  const attemptPlayback = useCallback((index: number, video: HTMLVideoElement) => {
+    if (
+      phaseRef.current !== "VIDEO_INTRO" ||
+      activeClipIndex.current !== index ||
+      attemptedPlayIndex.current === index
+    ) return;
+
+    attemptedPlayIndex.current = index;
+    void video.play().catch(() => advanceClip(index));
+  }, [advanceClip]);
+
+  const markPreloadReady = useCallback((index: number) => {
+    readyPreloadIndex.current = index;
+    if (waitingForClipRef.current === index) advanceClip(index - 1);
+  }, [advanceClip]);
+
+  const handlePreloadError = useCallback((index: number) => {
+    failedPreloads.current.add(index);
+    if (waitingForClipRef.current === index) advanceClip(index - 1, true);
+  }, [advanceClip]);
+
+  useEffect(() => {
+    const video = activeVideoRef.current;
+    if (
+      phase === "VIDEO_INTRO" &&
+      video &&
+      video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
+    ) {
+      attemptPlayback(clipIndex, video);
+    }
+  }, [attemptPlayback, clipIndex, phase]);
 
   useEffect(() => {
     lockScroll();
@@ -158,14 +238,63 @@ export function IntroAnimation({ onReveal, onDone }: Props) {
   }, [reduce, skip]);
 
   useEffect(() => {
-    if (phase !== "VIDEO_INTRO" || reduce) return;
+    if (phase !== "VIDEO_INTRO" || reduce || startedClipIndex === clipIndex) return;
     const currentIndex = clipIndex;
-    const fallback = window.setTimeout(
+    const timeout = window.setTimeout(
       () => advanceClip(currentIndex),
-      CLIPS[currentIndex].duration + 700,
+      VIDEO_LOAD_TIMEOUT_MS,
     );
-    return () => window.clearTimeout(fallback);
-  }, [advanceClip, clipIndex, phase, reduce]);
+    return () => window.clearTimeout(timeout);
+  }, [advanceClip, clipIndex, phase, reduce, startedClipIndex]);
+
+  useEffect(() => {
+    if (phase !== "VIDEO_INTRO" || reduce || stalledClipIndex !== clipIndex) return;
+    const currentIndex = clipIndex;
+    const timeout = window.setTimeout(
+      () => advanceClip(currentIndex),
+      VIDEO_STALL_TIMEOUT_MS,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [advanceClip, clipIndex, phase, reduce, stalledClipIndex]);
+
+  useEffect(() => {
+    if (phase !== "VIDEO_INTRO" || reduce || waitingForClip === null) return;
+    const targetIndex = waitingForClip;
+    const timeout = window.setTimeout(() => {
+      const previousIndex = targetIndex - 1;
+      if (activeClipIndex.current === previousIndex) {
+        advanceClip(previousIndex, true);
+      }
+    }, NEXT_VIDEO_TIMEOUT_MS);
+    return () => window.clearTimeout(timeout);
+  }, [advanceClip, phase, reduce, waitingForClip]);
+
+  useEffect(() => {
+    if (!hasStartedVideo) return;
+    let cancelled = false;
+    let cursor = 0;
+    let timer = 0;
+    const photos = [...new Set(PHOTO_SET)];
+
+    const loadBatch = async () => {
+      const batch = photos.slice(cursor, cursor + 2);
+      cursor += batch.length;
+      const results = await Promise.all(batch.map(preloadPhoto));
+      if (cancelled) return;
+
+      const failedPhotos = batch.filter((_, index) => !results[index]);
+      if (failedPhotos.length) {
+        setFailed((current) => new Set([...current, ...failedPhotos]));
+      }
+      if (cursor < photos.length) timer = window.setTimeout(loadBatch, 100);
+    };
+
+    void loadBatch();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [hasStartedVideo]);
 
   useEffect(() => {
     if (phase !== "PHOTO_WALL" || reduce) return;
@@ -224,24 +353,67 @@ export function IntroAnimation({ onReveal, onDone }: Props) {
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.28, ease: EASE_CINEMA }}
               >
-                <AnimatePresence mode="wait" initial={false}>
-                  <motion.video
-                    key={clipIndex}
-                    data-intro-clip={clipIndex}
-                    className="cafe-film-video"
-                    src={CLIPS[clipIndex].src}
-                    muted
-                    autoPlay
-                    playsInline
-                    preload={clipIndex === 0 ? "auto" : "metadata"}
-                    onEnded={() => advanceClip(clipIndex)}
-                    onError={() => advanceClip(clipIndex)}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.22, ease: EASE_CINEMA }}
-                    aria-hidden="true"
-                  />
+                <AnimatePresence initial={false}>
+                  {(startedClipIndex === clipIndex && clipIndex < CLIPS.length - 1
+                    ? [clipIndex, clipIndex + 1]
+                    : [clipIndex]
+                  ).map((index) => {
+                    const active = index === clipIndex;
+                    return (
+                      <motion.video
+                        key={index}
+                        ref={(video) => {
+                          if (active) activeVideoRef.current = video;
+                          else if (activeVideoRef.current === video) activeVideoRef.current = null;
+                        }}
+                        data-intro-clip={index}
+                        className={active ? "cafe-film-video" : "cafe-film-video cafe-film-preload"}
+                        src={CLIPS[index].src}
+                        muted
+                        playsInline
+                        preload="auto"
+                        onLoadedData={(event) => {
+                          if (active) attemptPlayback(index, event.currentTarget);
+                        }}
+                        onCanPlay={(event) => {
+                          if (active) attemptPlayback(index, event.currentTarget);
+                          else markPreloadReady(index);
+                        }}
+                        onPlaying={() => {
+                          if (!active || activeClipIndex.current !== index) return;
+                          setStartedClipIndex(index);
+                          setHasStartedVideo(true);
+                          setStalledClipIndex(-1);
+                        }}
+                        onWaiting={() => {
+                          if (active && startedClipIndex === index) setStalledClipIndex(index);
+                        }}
+                        onEnded={() => {
+                          if (!active || activeClipIndex.current !== index) return;
+                          const nextIndex = index + 1;
+                          if (nextIndex >= CLIPS.length) {
+                            advanceClip(index);
+                          } else if (readyPreloadIndex.current === nextIndex) {
+                            advanceClip(index);
+                          } else if (failedPreloads.current.has(nextIndex)) {
+                            advanceClip(index, true);
+                          } else {
+                            waitingForClipRef.current = nextIndex;
+                            setWaitingForClip(nextIndex);
+                          }
+                        }}
+                        onError={() => {
+                          if (active) advanceClip(index);
+                          else handlePreloadError(index);
+                        }}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: active ? 1 : 0 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.22, ease: EASE_CINEMA }}
+                        aria-hidden="true"
+                      />
+                    );
+                  })}
                 </AnimatePresence>
                 <div className="cafe-film-grade pointer-events-none absolute inset-0" />
               </motion.div>
@@ -344,7 +516,7 @@ export function IntroAnimation({ onReveal, onDone }: Props) {
                                 src={tile.front}
                                 alt=""
                                 decoding="async"
-                                loading={index < 3 ? "eager" : "lazy"}
+                                loading="eager"
                                 fetchPriority={index === 0 ? "high" : "low"}
                                 onError={() =>
                                   setFailed((current) =>
@@ -368,7 +540,7 @@ export function IntroAnimation({ onReveal, onDone }: Props) {
                                 src={tile.back}
                                 alt=""
                                 decoding="async"
-                                loading="lazy"
+                                loading="eager"
                                 fetchPriority="low"
                                 onError={() =>
                                   setFailed((current) =>

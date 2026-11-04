@@ -44,3 +44,59 @@ test('intro and gallery optimized photo references resolve to WebP assets', asyn
 
   assert.ok(optimizedBytes < originalBytes * 0.1, 'optimized transfer payload is under 10% of the original photos')
 })
+
+test('intro videos, responsive hero photos, and the official logo resolve to optimized assets', async () => {
+  const [intro, hero, registry, html] = await Promise.all([
+    readFile(new URL('../components/IntroAnimation.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../sections/HeroSection.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('./images.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../../index.html', import.meta.url), 'utf8'),
+  ])
+  const videoPaths = [...intro.matchAll(/src: "(\/videos\/intro-[1-4]\.mp4)"/g)].map((match) => match[1])
+  assert.deepEqual(videoPaths, [1, 2, 3, 4].map((number) => `/videos/intro-${number}.mp4`))
+  for (const videoPath of videoPaths) {
+    assert.ok((await stat(new URL(`../../public${videoPath}`, import.meta.url))).size > 0, `${videoPath} exists with exact casing`)
+  }
+
+  const variants = ['sitiing-768.webp', 'sitiing-1280.webp', 'sitiing-1920.webp']
+  let variantBytes = 0
+  for (const filename of variants) {
+    const data = await readFile(new URL(`../../public/images/optimized/${filename}`, import.meta.url))
+    assert.equal(data.subarray(0, 4).toString('ascii'), 'RIFF', `${filename} has a RIFF container`)
+    assert.equal(data.subarray(8, 12).toString('ascii'), 'WEBP', `${filename} is WebP encoded`)
+    variantBytes += data.byteLength
+  }
+  const heroOriginal = await stat(new URL('../../public/images/sitiing.jpeg', import.meta.url))
+  assert.ok(variantBytes < heroOriginal.size * 0.1, 'responsive hero variants are under 10% of the original image size')
+  assert.match(hero, /<source[\s\S]*?type="image\/webp"[\s\S]*?srcSet=/)
+  assert.match(hero, /sizes="\(min-width: 1280px\) 55vw, \(min-width: 768px\) 70vw, 95vw"/)
+
+  const logo = await readFile(new URL('../../public/images/optimized/logo-svg-medallion.webp', import.meta.url))
+  const sourceLogo = await stat(new URL('../../public/images/logo-svg-medallion.png', import.meta.url))
+  assert.equal(logo.subarray(8, 12).toString('ascii'), 'WEBP')
+  assert.ok(logo.byteLength < sourceLogo.size, 'lossless WebP logo is smaller than its PNG source')
+  assert.match(registry, /src: '\/images\/optimized\/logo-svg-medallion\.webp'/)
+  assert.match(html, /rel="preload" as="image" href="\/images\/optimized\/logo-svg-medallion\.webp" fetchpriority="high"/)
+  assert.match(html, /rel="preload" as="video" href="\/videos\/intro-1\.mp4"/)
+  assert.doesNotMatch(html, /rel="preload" as="video" href="\/videos\/intro-[234]\.mp4"/)
+})
+
+test('intro advances only after media readiness and handles failed playback safely', async () => {
+  const intro = await readFile(new URL('../components/IntroAnimation.tsx', import.meta.url), 'utf8')
+
+  assert.match(intro, /onLoadedData=\{/)
+  assert.match(intro, /onCanPlay=\{/)
+  assert.match(intro, /video\.play\(\)\.catch\(\(\) => advanceClip\(index\)\)/)
+  assert.match(intro, /onEnded=\{/)
+  assert.match(intro, /onError=\{/)
+  assert.match(intro, /VIDEO_LOAD_TIMEOUT_MS/)
+  assert.match(intro, /VIDEO_STALL_TIMEOUT_MS/)
+  assert.match(intro, /NEXT_VIDEO_TIMEOUT_MS/)
+  assert.match(intro, /readyPreloadIndex\.current === nextIndex/)
+  assert.match(intro, /video\.readyState >= HTMLMediaElement\.HAVE_CURRENT_DATA/)
+  assert.match(intro, /key=\{index\}/)
+  assert.match(intro, /new Set\(PHOTO_SET\)/)
+  assert.match(intro, /image\.decode\(\)/)
+  assert.match(intro, /image\.fetchPriority = "low"/)
+  assert.doesNotMatch(intro, /\bautoPlay\b/)
+})

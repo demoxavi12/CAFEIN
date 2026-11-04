@@ -255,7 +255,7 @@ export function SignatureSpecials({ onSelect }: Props) {
     <section id="specials" aria-labelledby="specials-title" className="relative isolate overflow-hidden bg-espresso-2 py-16 text-ivory sm:py-20 lg:py-20">
       <EmberBackground strength="warm" />
       <div className="container-x relative z-10">
-        <SectionHeading id="specials-title" eyebrow={publishedSpecials?.eyebrow ?? specials.eyebrow} title={publishedSpecials?.title ?? specials.title} italic="at Cafe In." />
+        <SectionHeading id="specials-title" eyebrow={publishedSpecials?.eyebrow ?? specials.eyebrow} title="There's always room for something special." />
         {draftPreview && (
           <p role={previewError ? 'alert' : 'status'} className={`mt-4 text-sm ${previewError ? 'text-amber-200' : 'text-ivory-2/75'}`}>
             {previewError

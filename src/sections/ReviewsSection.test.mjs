@@ -5,55 +5,54 @@ import test from 'node:test'
 const sectionUrl = new URL('./ReviewsSection.tsx', import.meta.url)
 const component = await readFile(sectionUrl, 'utf8')
 const homepage = await readFile(new URL('../App.tsx', import.meta.url), 'utf8')
-const assetDirectory = new URL('../../public/images/google-reviews/', import.meta.url)
+const dataset = JSON.parse(await readFile(new URL('../data/reviews.json', import.meta.url), 'utf8'))
+const archiveDirectory = new URL('../../archive/google-reviews/', import.meta.url)
 
-function readJpegDimensions(buffer) {
-  if (buffer[0] !== 0xff || buffer[1] !== 0xd8) return null
-
-  let offset = 2
-  while (offset < buffer.length) {
-    if (buffer[offset] !== 0xff) {
-      offset += 1
-      continue
-    }
-
-    let marker = buffer[offset + 1]
-    offset += 2
-    while (marker === 0xff) marker = buffer[offset++]
-    if ([0xd8, 0xd9, 0x01].includes(marker) || (marker >= 0xd0 && marker <= 0xd7)) continue
-
-    const segmentLength = buffer.readUInt16BE(offset)
-    if ([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf].includes(marker)) {
-      return { width: buffer.readUInt16BE(offset + 5), height: buffer.readUInt16BE(offset + 3) }
-    }
-    offset += segmentLength
-  }
-
-  return null
-}
-
-test('homepage renders the original Google review screenshot gallery assets', async () => {
-  const referencedPaths = [...component.matchAll(/src:\s*'(\/images\/google-reviews\/[^']+)'/g)].map((match) => match[1])
-  const expectedPaths = Array.from({ length: 24 }, (_, index) => `/images/google-reviews/review-${String(index + 1).padStart(2, '0')}.jpeg`)
-  const directoryFiles = (await readdir(assetDirectory)).sort()
-
+test('homepage carousel renders 21 unique dataset reviews with expandable complete reviews', () => {
   assert.match(homepage, /<ReviewsSection\s*\/>/)
-  assert.deepEqual(referencedPaths, expectedPaths)
-  assert.deepEqual(directoryFiles, expectedPaths.map((path) => path.split('/').at(-1)))
-  assert.match(component, /loading="lazy"/)
-  assert.match(component, /decoding="async"/)
-  assert.match(component, /onError=\{\(\) => setFailed\(true\)\}/)
+  assert.equal(dataset.length, 21)
+  assert.equal(new Set(dataset.map(({ id }) => id)).size, 21)
+  assert.equal(new Set(dataset.map(({ text }) => text)).size, 21)
+  assert.ok(dataset.every(({ id, name, text, rating }) => id && name.trim() && text.trim() && [4, 5].includes(rating)))
+  assert.deepEqual([...new Set(dataset.map(({ rating }) => rating))].sort(), [4, 5])
+  assert.equal(dataset.filter(({ truncated }) => truncated === true).length, 1)
 
-  for (const [index, path] of expectedPaths.entries()) {
-    const asset = await readFile(new URL(`../../public${path}`, import.meta.url))
-    const dimensions = readJpegDimensions(asset)
-    const filename = path.split('/').at(-1).replaceAll('.', '\\.')
-    const declared = component.match(new RegExp(`src: '${path.replaceAll('.', '\\.')}', width: (\\d+), height: (\\d+)`))
+  assert.match(component, /from '\.\.\/data\/reviews\.json\?raw'/)
+  assert.match(component, /reviews\.slice\(groupIndex \* reviewsPerGroup/)
+  assert.match(component, /groupReviews\.map\(\(review, index\)/)
+  assert.match(component, /key=\{review\.id\}/)
+  assert.match(component, /review\.rating/)
+  assert.match(component, /!review\.truncated/)
+  assert.match(component, /aria-expanded=\{expanded\}/)
+  assert.match(component, /Read more/)
+  assert.match(component, /Read less/)
+  assert.match(component, /whitespace-pre-line/)
+  assert.doesNotMatch(component, /review\.dateLabel/)
+  assert.doesNotMatch(component, /\/images\/google-reviews\//)
+  assert.match(component, /desktop \? 3 : tablet \? 2 : 1/)
+  assert.match(component, /AUTO_ADVANCE_MS = 7_000/)
+  assert.match(component, /window\.setTimeout/)
+  assert.match(component, /window\.clearTimeout/)
+  assert.match(component, /onPanEnd/)
+  assert.match(component, /setExpandedReviewIds/)
+  assert.match(component, /getBoundingClientRect\(\)\.height/)
+  assert.match(component, /ResizeObserver/)
+  assert.match(component, /aria-label="Show previous review group"/)
+  assert.match(component, /aria-label="Show next review group"/)
+  assert.match(component, /aria-label=\{autoPaused \? 'Resume review autoplay' : 'Pause review autoplay'\}/)
+  assert.match(component, /self-start rounded-xl/)
+  assert.doesNotMatch(component, /<motion\.article\s+className="[^"]*\bh-full\b/)
+  assert.doesNotMatch(component, /<blockquote className="[^"]*\bflex-1\b/)
+})
 
-    assert.ok(dimensions, `${filename} is a valid JPEG`)
-    assert.ok(declared, `${filename} has responsive dimensions declared`)
-    assert.equal(dimensions.width, Number(declared[1]), `${filename} width matches its declared width`)
-    assert.equal(dimensions.height, Number(declared[2]), `${filename} height matches its declared height`)
-    assert.equal(index + 1, Number(filename.match(/\d+/)?.[0]), `${filename} sequence is correct`)
+test('original Google review screenshots are preserved outside public assets', async () => {
+  const archivedFiles = (await readdir(archiveDirectory)).sort()
+  const expectedFiles = Array.from({ length: 24 }, (_, index) => `review-${String(index + 1).padStart(2, '0')}.jpeg`)
+  assert.deepEqual(archivedFiles, expectedFiles)
+
+  for (const filename of expectedFiles) {
+    const image = await readFile(new URL(filename, archiveDirectory))
+    assert.equal(image[0], 0xff, `${filename} has the JPEG start marker`)
+    assert.equal(image[1], 0xd8, `${filename} has the JPEG start marker`)
   }
 })

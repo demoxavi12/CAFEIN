@@ -52,11 +52,15 @@ test('intro videos, responsive hero photos, and the official logo resolve to opt
     readFile(new URL('./images.ts', import.meta.url), 'utf8'),
     readFile(new URL('../../index.html', import.meta.url), 'utf8'),
   ])
-  const videoPaths = [...intro.matchAll(/src: "(\/videos\/intro-[1-4]\.mp4)"/g)].map((match) => match[1])
-  assert.deepEqual(videoPaths, [1, 2, 3, 4].map((number) => `/videos/intro-${number}.mp4`))
-  for (const videoPath of videoPaths) {
-    assert.ok((await stat(new URL(`../../public${videoPath}`, import.meta.url))).size > 0, `${videoPath} exists with exact casing`)
-  }
+  const videoPath = '/videos/intro-combined.mp4'
+  assert.match(intro, /const INTRO_VIDEO = "\/videos\/intro-combined\.mp4"/)
+  const combinedVideo = await stat(new URL(`../../public${videoPath}`, import.meta.url))
+  assert.ok(combinedVideo.size > 0, `${videoPath} exists with exact casing`)
+  const originalClips = await Promise.all([1, 2, 3, 4].map((number) =>
+    stat(new URL(`../../public/videos/intro-${number}.mp4`, import.meta.url)),
+  ))
+  assert.ok(originalClips.every((clip) => clip.size > 0), 'the original intro clips remain available')
+  assert.ok(combinedVideo.size < originalClips.reduce((total, clip) => total + clip.size, 0), 'the combined intro is smaller than the four original files')
 
   const variants = ['sitiing-768.webp', 'sitiing-1280.webp', 'sitiing-1920.webp']
   let variantBytes = 0
@@ -77,26 +81,26 @@ test('intro videos, responsive hero photos, and the official logo resolve to opt
   assert.ok(logo.byteLength < sourceLogo.size, 'lossless WebP logo is smaller than its PNG source')
   assert.match(registry, /src: '\/images\/optimized\/logo-svg-medallion\.webp'/)
   assert.match(html, /rel="preload" as="image" href="\/images\/optimized\/logo-svg-medallion\.webp" fetchpriority="high"/)
-  assert.match(html, /rel="preload" as="video" href="\/videos\/intro-1\.mp4"/)
-  assert.doesNotMatch(html, /rel="preload" as="video" href="\/videos\/intro-[234]\.mp4"/)
+  assert.match(html, /rel="preload" as="video" href="\/videos\/intro-combined\.mp4"/)
+  assert.doesNotMatch(html, /rel="preload" as="video" href="\/videos\/intro-[1-4]\.mp4"/)
 })
 
-test('intro advances only after media readiness and handles failed playback safely', async () => {
+test('single intro video advances once on completion and handles media failures safely', async () => {
   const intro = await readFile(new URL('../components/IntroAnimation.tsx', import.meta.url), 'utf8')
 
-  assert.match(intro, /onLoadedData=\{/)
   assert.match(intro, /onCanPlay=\{/)
-  assert.match(intro, /video\.play\(\)\.catch\(\(\) => advanceClip\(index\)\)/)
-  assert.match(intro, /onEnded=\{/)
-  assert.match(intro, /onError=\{/)
-  assert.match(intro, /VIDEO_LOAD_TIMEOUT_MS/)
+  assert.match(intro, /video\.play\(\)\.catch\(advanceVideo\)/)
+  assert.match(intro, /onEnded=\{advanceVideo\}/)
+  assert.match(intro, /onError=\{advanceVideo\}/)
+  assert.match(intro, /VIDEO_FAILSAFE_TIMEOUT_MS/)
   assert.match(intro, /VIDEO_STALL_TIMEOUT_MS/)
-  assert.match(intro, /NEXT_VIDEO_TIMEOUT_MS/)
-  assert.match(intro, /readyPreloadIndex\.current === nextIndex/)
+  assert.match(intro, /transition\("VIDEO_INTRO", "PHOTO_WALL"\)/)
+  assert.doesNotMatch(intro, /CLIPS|clipIndex|NEXT_VIDEO_TIMEOUT_MS/)
   assert.match(intro, /video\.readyState >= HTMLMediaElement\.HAVE_CURRENT_DATA/)
-  assert.match(intro, /key=\{index\}/)
+  assert.match(intro, /key="intro-video"/)
   assert.match(intro, /new Set\(PHOTO_SET\)/)
   assert.match(intro, /image\.decode\(\)/)
   assert.match(intro, /image\.fetchPriority = "low"/)
-  assert.doesNotMatch(intro, /\bautoPlay\b/)
+  assert.match(intro, /autoPlay/)
+  assert.match(intro, /muted/)
 })

@@ -3,6 +3,7 @@ dist
 *.local
 drive_downloads/
 public/videos/*.mp4
+!public/videos/intro-combined.mp4
 public/images/google-reviews/
 !public/images/google-reviews/
 public/images/google-reviews/*

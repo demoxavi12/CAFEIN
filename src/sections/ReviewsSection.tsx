@@ -108,11 +108,9 @@ export function ReviewsSection() {
   const groupEnd = Math.min(groupStart + reviewsPerGroup, reviews.length)
   const [expandedReviewIds, setExpandedReviewIds] = useState<Set<string>>(() => new Set())
   const [explicitlyPaused, setExplicitlyPaused] = useState(false)
-  const [isHovered, setIsHovered] = useState(false)
-  const [focusWithin, setFocusWithin] = useState(false)
   const [viewportHeight, setViewportHeight] = useState<number>()
   const slidesRef = useRef<Array<HTMLDivElement | null>>([])
-  const autoPaused = reduceMotion || explicitlyPaused || isHovered || focusWithin
+  const autoPaused = reduceMotion || explicitlyPaused
 
   useEffect(() => {
     if (autoPaused || groupCount < 2) return
@@ -166,14 +164,7 @@ export function ReviewsSection() {
   }
 
   const toggleAutoplay = () => {
-    if (explicitlyPaused) {
-      setExplicitlyPaused(false)
-      setFocusWithin(false)
-    } else if (autoPaused) {
-      setFocusWithin(false)
-    } else {
-      setExplicitlyPaused(true)
-    }
+    setExplicitlyPaused((current) => !current)
   }
 
   return (
@@ -214,13 +205,6 @@ export function ReviewsSection() {
           aria-label="Customer reviews carousel"
           aria-roledescription="carousel"
           className="mt-9 min-w-0 sm:mt-11"
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-          onFocusCapture={() => setFocusWithin(true)}
-          onBlurCapture={(event) => {
-            const nextTarget = event.relatedTarget
-            if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) setFocusWithin(false)
-          }}
         >
           <motion.div
             id="review-carousel-viewport"

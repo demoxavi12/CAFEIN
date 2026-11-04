@@ -56,3 +56,13 @@ test('original Google review screenshots are preserved outside public assets', a
     assert.equal(image[1], 0xd8, `${filename} has the JPEG start marker`)
   }
 })
+
+test('review autoplay runs from mount independently of scroll visibility with manual pause retained', () => {
+  assert.match(component, /if \(autoPaused \|\| groupCount < 2\) return[\s\S]{0,400}AUTO_ADVANCE_MS/)
+  assert.match(component, /\}, \[activeGroup, autoPaused, groupCount, reviewsPerGroup\]\)/)
+  assert.doesNotMatch(component, /document\.visibilityState|IntersectionObserver|isIntersecting|document\.hidden/i)
+  assert.match(component, /const autoPaused = reduceMotion \|\| explicitlyPaused/)
+  assert.doesNotMatch(component, /isHovered|focusWithin/)
+  assert.match(component, /setExplicitlyPaused\(\(current\) => !current\)/)
+  assert.match(component, /const AUTO_ADVANCE_MS = 7_000/)
+})

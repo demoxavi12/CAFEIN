@@ -1,6 +1,6 @@
 import { motion } from 'motion/react'
-import { specials, temporaryItems } from '../data/specials'
-import { formatPrice, type MenuItem } from '../data/menu'
+import { homepageSpecials, resolveHomepageSpecials, specials, type HomepageSpecialCard } from '../data/specials'
+import { formatPrice, menuItems, type MenuItem } from '../data/menu'
 import { useLiveMenu } from '../digital-menu/adminStore'
 import { SectionHeading } from '../components/SectionHeading'
 import { RevealImage } from '../components/RevealImage'
@@ -20,18 +20,21 @@ interface Props {
 const panelTones = ['bg-mocha', 'bg-espresso-2']
 const pad = (n: number) => String(n).padStart(2, '0')
 
-function SpecialCard({ item, index, total, tone, onSelect, slot, visible, stepVw, neighborScale, compact, reduceMotion }: { item: MenuItem; index: number; total: number; tone: string; onSelect: (item: MenuItem) => void; slot: number; visible: boolean; stepVw: number; neighborScale: number; compact: boolean; reduceMotion: boolean }) {
-  const label = `${item.name}, ${formatPrice(item.price)}${item.needsConfirmation ? ' (details to be confirmed)' : ''} — view details`
-  const interactive = visible && (!compact || slot === 0)
+function SpecialCard({ item, index, total, tone, onSelect, slot, visible, stepVw, neighborScale, compact, reduceMotion }: { item: HomepageSpecialCard; index: number; total: number; tone: string; onSelect: (item: MenuItem) => void; slot: number; visible: boolean; stepVw: number; neighborScale: number; compact: boolean; reduceMotion: boolean }) {
+  const menuItem = item.menuItem
+  const accessible = visible && (!compact || slot === 0)
+  const label = menuItem
+    ? `${item.name}, ${formatPrice(menuItem.price)}${menuItem.needsConfirmation ? ' (details to be confirmed)' : ''} — view details`
+    : item.name
   return (
     <motion.li
       aria-roledescription="slide"
       aria-label={`${index + 1} of ${total}: ${item.name}`}
-      aria-hidden={!interactive}
-      inert={!interactive}
+      aria-hidden={!accessible}
+      inert={!accessible}
       data-slot={slot}
       className="specials-card"
-      style={{ pointerEvents: interactive ? 'auto' : 'none' }}
+      style={{ pointerEvents: accessible ? 'auto' : 'none' }}
       initial={false}
       animate={{
         x: `${slot * stepVw}vw`,
@@ -51,9 +54,9 @@ function SpecialCard({ item, index, total, tone, onSelect, slot, visible, stepVw
         transition={{ duration: 0.9, ease: EASE_OUT, delay: Math.min(index, 3) * 0.08 }}
       >
         <div className="relative overflow-hidden rounded-sm shadow-[0_26px_52px_-32px_rgba(0,0,0,0.72)] transition-[transform,box-shadow] duration-700 ease-[var(--ease-out-soft)] group-hover:-translate-y-1 group-hover:shadow-[0_34px_64px_-32px_rgba(0,0,0,0.78)] lg:h-[min(425px,calc(100svh-363px))]">
-          {item.image ? (
+          {menuItem?.image ? (
             <RevealImage
-              image={item.image}
+              image={menuItem.image}
               className="aspect-[4/5] lg:aspect-auto lg:h-full"
               imgClassName="transition-transform duration-[1.4s] ease-[var(--ease-out-soft)] group-hover:scale-[1.05]"
             />
@@ -67,9 +70,9 @@ function SpecialCard({ item, index, total, tone, onSelect, slot, visible, stepVw
                 aria-hidden="true"
                 className="specials-card-placeholder-ring absolute -top-2 -right-2 h-40 w-40 rounded-full border border-bronze/20 transition-transform duration-[1.4s] ease-[var(--ease-out-soft)] group-hover:scale-125"
               />
-              <p className="label mb-3 text-bronze-light">From the menu</p>
+              {menuItem?.section && <p className="label mb-3 text-bronze-light">From the menu</p>}
               <p aria-hidden="true" className="specials-card-placeholder-title display relative text-[clamp(2.4rem,4vw,3.4rem)] text-ivory italic">
-                {item.section}
+                {menuItem?.section ?? item.name}
               </p>
             </div>
           )}
@@ -79,32 +82,36 @@ function SpecialCard({ item, index, total, tone, onSelect, slot, visible, stepVw
         <div className="specials-card-content flex flex-1 flex-col px-1 pt-6 lg:pt-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <p className="label text-bronze">{item.section}</p>
+              {menuItem?.section && <p className="label text-bronze">{menuItem.section}</p>}
               <h3 className="display mt-2 text-[1.9rem] leading-[1.05] sm:text-[2.1rem]">
-                <button
-                  type="button"
-                  onClick={() => onSelect(item)}
-                  aria-label={label}
-                  className="text-left text-ivory after:absolute after:inset-0 after:rounded-sm after:content-[''] focus-visible:outline-none"
-                >
-                  {item.name}
-                </button>
+                {menuItem ? (
+                  <button
+                    type="button"
+                    onClick={() => onSelect(menuItem)}
+                    aria-label={label}
+                    className="text-left text-ivory after:absolute after:inset-0 after:rounded-sm after:content-[''] focus-visible:outline-none"
+                  >
+                    {item.name}
+                  </button>
+                ) : <span className="text-left text-ivory">{item.name}</span>}
               </h3>
             </div>
-            <span className="display shrink-0 pt-5 text-[1.7rem] text-ivory-2">{formatPrice(item.price)}</span>
+            {menuItem && <span className="display shrink-0 pt-5 text-[1.7rem] text-ivory-2">{formatPrice(menuItem.price)}</span>}
           </div>
           {/* Two-line slot keeps every card the same height */}
-          <p aria-hidden={!item.description} className={`mt-3 lg:mt-2 line-clamp-2 min-h-[3.25em] text-sm leading-relaxed ${item.description ? 'text-ivory-2' : 'text-transparent'}`}>
-            {item.description ?? '\u00a0'}
+          <p aria-hidden={!menuItem?.description} className={`mt-3 lg:mt-2 line-clamp-2 min-h-[3.25em] text-sm leading-relaxed ${menuItem?.description ? 'text-ivory-2' : 'text-transparent'}`}>
+            {menuItem?.description ?? '\u00a0'}
           </p>
           <div className="mt-5 lg:mt-2 flex items-center justify-between gap-3 border-t border-ivory/15 pt-4 lg:pt-2">
-            {item.needsConfirmation ? <ConfirmFlag note={item.needsConfirmation} tone="light" /> : <span />}
-            <span className="label inline-flex items-center gap-2 text-ivory/70 transition-colors group-hover:text-ivory">
-              View details
-              <span aria-hidden="true" className="transition-transform duration-500 group-hover:translate-x-1">
-                →
+            {menuItem?.needsConfirmation ? <ConfirmFlag note={menuItem.needsConfirmation} tone="light" /> : <span />}
+            {menuItem && (
+              <span className="label inline-flex items-center gap-2 text-ivory/70 transition-colors group-hover:text-ivory">
+                View details
+                <span aria-hidden="true" className="transition-transform duration-500 group-hover:translate-x-1">
+                  →
+                </span>
               </span>
-            </span>
+            )}
           </div>
         </div>
       </motion.article>
@@ -158,12 +165,16 @@ export function SignatureSpecials({ onSelect }: Props) {
     const timer = window.setInterval(refresh, 30_000)
     return () => { active = false; window.clearInterval(timer) }
   }, [draftPreview])
-  const featuredItems = [
-    ...(draftSpecials?.items ?? publishedSpecials?.items ?? [
-      ...specials.ids.map((id) => liveMenuItems.find((item) => item.id === id)).filter((item): item is NonNullable<typeof item> => Boolean(item)),
-      ...temporaryItems,
-    ]),
-  ]
+  const remoteSpecialItems = draftPreview ? draftSpecials?.items : publishedSpecials?.items
+  const remoteSelectionMatches = remoteSpecialItems?.length === homepageSpecials.length
+    && remoteSpecialItems.every((item, index) => item.name.toLocaleLowerCase() === homepageSpecials[index].name.toLocaleLowerCase())
+  const featuredItems: HomepageSpecialCard[] = remoteSelectionMatches && remoteSpecialItems
+    ? remoteSpecialItems.map((menuItem, index) => ({
+        id: homepageSpecials[index].id,
+        name: homepageSpecials[index].name,
+        menuItem,
+      }))
+    : resolveHomepageSpecials([...liveMenuItems, ...menuItems])
   const total = featuredItems.length
   const [activeIndex, setActiveIndex] = useState(0)
   const step = (direction: 1 | -1) => setActiveIndex((current) => (current + direction + total) % total)
@@ -176,7 +187,7 @@ export function SignatureSpecials({ onSelect }: Props) {
   const pendingEdgeDirection = useRef<1 | -1 | 0>(0)
   const touchStartX = useRef<number | null>(null)
   let typographic = 0
-  const tones = featuredItems.map((item) => (item.image ? '' : panelTones[typographic++ % panelTones.length]))
+  const tones = featuredItems.map((item) => (item.menuItem?.image ? '' : panelTones[typographic++ % panelTones.length]))
   const visibleSlots = compact || tablet ? 1 : 2
   const stepVw = compact ? 43 : tablet ? 31 : 21
   const canScroll = total > 1

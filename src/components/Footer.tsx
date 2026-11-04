@@ -18,15 +18,16 @@ export function Footer() {
         <div className="grid gap-10 border-b border-ivory/10 pb-10 sm:gap-12 sm:pb-12 lg:grid-cols-12">
           <div className="flex items-center gap-6 lg:col-span-5">
             {/* Original Cafe In logo, shown as a round medallion */}
-            <img
-              src={images.logo.src}
-              alt={images.logo.alt}
-              width={images.logo.width}
-              height={images.logo.height}
-              loading="lazy"
-              className="h-24 w-24 shrink-0 rounded-full object-cover ring-1 ring-bronze/40 sm:h-28 sm:w-28"
-              style={{ objectPosition: '50% 40%' }}
-            />
+            <span className="relative block h-24 w-24 shrink-0 overflow-hidden rounded-full bg-[#f4e8d7] ring-1 ring-bronze/40 sm:h-28 sm:w-28">
+              <img
+                src={images.logoMedallion.src}
+                alt={images.logoMedallion.alt}
+                width={images.logoMedallion.width}
+                height={images.logoMedallion.height}
+                loading="lazy"
+                className="absolute top-1/2 left-1/2 h-auto w-[145%] max-w-none -translate-x-1/2 -translate-y-1/2 object-contain"
+              />
+            </span>
             <div>
               <Wordmark className="text-2xl text-ivory" />
               <p className="label mt-3 text-bronze-light">{business.tagline}</p>

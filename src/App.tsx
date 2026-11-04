@@ -134,10 +134,10 @@ export default function App() {
             <main>
               <HeroSection />
               <SignatureSpecials onSelect={setSelected} />
+              <ReviewsSection />
               <MenuSection onSelect={setSelected} />
               <AboutSection />
               <GallerySection />
-              <ReviewsSection />
               <VisitUsSection />
             </main>
             <Footer />

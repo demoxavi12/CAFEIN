@@ -53,7 +53,8 @@ export function Footer() {
             {hasContact ? (
               <address className="mt-5 space-y-2 text-ivory/80 not-italic">
                 {business.address && <p>{business.address}</p>}
-                {business.phone && <p>{business.phone}</p>}
+                {business.phone && <a className="link-underline block min-h-11 w-fit py-2" href={`tel:${business.phone.replace(/\s/g, '')}`}>{business.phone}</a>}
+                {business.additionalPhones.map((phone) => <a key={phone} className="link-underline block min-h-11 w-fit py-2" href={`tel:${phone.replace(/\s/g, '')}`}>{phone}</a>)}
                 {business.email && <p>{business.email}</p>}
               </address>
             ) : (

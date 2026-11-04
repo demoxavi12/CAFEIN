@@ -18,8 +18,6 @@ function Detail({ label, children, pending }: { label: string; children: ReactNo
 const PENDING = 'Awaiting verified details from Cafe In'
 const DIRECTIONS_URL = 'https://maps.app.goo.gl/b53d1Gxnwcnpeb1QA'
 const INSTAGRAM_URL = 'https://www.instagram.com/cafein.cafein'
-const ADDITIONAL_PHONE = '+91 99379 63773'
-
 export function VisitUsSection() {
   const { address, mapEmbedUrl, phone, hours } = business
   const reduceMotion = useReducedMotion()
@@ -60,13 +58,12 @@ export function VisitUsSection() {
                     {phone}
                   </a>
                 )}
-                <a className="link-underline inline-flex min-h-11 items-center" href={`tel:${ADDITIONAL_PHONE.replace(/\s/g, '')}`}>
-                  {ADDITIONAL_PHONE}
-                </a>
+                {business.additionalPhones.map((additionalPhone) => (
+                  <a key={additionalPhone} className="link-underline inline-flex min-h-11 items-center" href={`tel:${additionalPhone.replace(/\s/g, '')}`}>
+                    {additionalPhone}
+                  </a>
+                ))}
               </span>
-            </Detail>
-            <Detail label="Email" pending>
-              Email address coming soon
             </Detail>
           </motion.dl>
 

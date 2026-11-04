@@ -25,6 +25,7 @@ export interface BusinessInfo {
   /** Google Maps embed src (https://www.google.com/maps/embed?pb=...) */
   mapEmbedUrl: string | null;
   phone: string | null;
+  additionalPhones: string[];
   email: string | null;
   hours: OpeningHours[] | null;
   socials: SocialLink[];
@@ -48,6 +49,7 @@ export const business: BusinessInfo = {
   directionsUrl:
     "https://www.google.com/maps/place/Cafein/@19.2200316,82.5466146,197m/data=!3m1!1e3!4m14!1m7!3m6!1s0x3a3ab99a6b9a9057:0xda492166d46e1e29!2sCafein!8m2!3d19.2197471!4d82.5474848!16s%2Fg%2F11zcxnknrd!3m5!1s0x3a3ab99a6b9a9057:0xda492166d46e1e29!8m2!3d19.2197471!4d82.5474848!16s%2Fg%2F11zcxnknrd?hl=en-US&entry=ttu",
   phone: "+91 824 962 6400",
+  additionalPhones: ["+91 99379 63773"],
   email: null,
   hours: [{ days: "Opening time", hours: "9:00 AM onwards" }],
   socials: [],

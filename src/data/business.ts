@@ -51,6 +51,6 @@ export const business: BusinessInfo = {
   phone: "+91 824 962 6400",
   additionalPhones: ["+91 99379 63773"],
   email: null,
-  hours: [{ days: "Opening time", hours: "9:00 AM onwards" }],
+  hours: [{ days: "Daily", hours: "10:30 AM – 9:30 PM" }],
   socials: [],
 };

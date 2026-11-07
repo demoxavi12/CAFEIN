@@ -1,6 +1,7 @@
 ﻿import test from 'node:test'
 import assert from 'node:assert/strict'
 import { randomBytes, scrypt as scryptCallback } from 'node:crypto'
+import bcrypt from 'bcryptjs'
 import { readFileSync } from 'node:fs'
 import { promisify } from 'node:util'
 import adminApi from '../api/admin.mjs'
@@ -212,6 +213,36 @@ test('manager authentication fails closed without configured Sanity writes', asy
   const handler = createSanityApiHandler({ env: { ...env, ADMIN_PASSWORD_HASH: 'configured' }, client: fakeClient(), writeClient: null, seed, imageUrlBuilder })
   const result = await call(handler, '/api/admin/login', { method: 'POST', headers: { origin: env.PUBLIC_ORIGIN }, body: { password: 'secret' } })
   assert.equal(result.status, 503)
+})
+
+test('Vercel manager login accepts the bcrypt hash and retains legacy scrypt fallback until removed', async () => {
+  const modernPassword = 'synthetic bcrypt manager password'
+  const legacyPassword = 'synthetic legacy manager password'
+  const secureEnv = {
+    ...env,
+    MANAGER_PASSWORD_HASH: await bcrypt.hash(modernPassword, 4),
+    ADMIN_PASSWORD_HASH: await makePasswordHash(legacyPassword),
+  }
+  const handler = createSanityApiHandler({ env: secureEnv, client: fakeClient(), writeClient: fakeClient(), seed, imageUrlBuilder })
+
+  const modernLogin = await call(handler, '/api/admin/login', { method: 'POST', headers: { origin: secureEnv.PUBLIC_ORIGIN }, body: { password: modernPassword } })
+  assert.equal(modernLogin.status, 200)
+  assert.match(modernLogin.headers['Set-Cookie'], /HttpOnly; SameSite=Strict/)
+
+  const legacyLogin = await call(handler, '/api/admin/login', { method: 'POST', headers: { origin: secureEnv.PUBLIC_ORIGIN }, body: { password: legacyPassword } })
+  assert.equal(legacyLogin.status, 200)
+
+  const noFallbackHandler = createSanityApiHandler({ env: { ...secureEnv, ADMIN_PASSWORD_HASH: '' }, client: fakeClient(), writeClient: fakeClient(), seed, imageUrlBuilder })
+  const rejectedLegacy = await call(noFallbackHandler, '/api/admin/login', { method: 'POST', headers: { origin: secureEnv.PUBLIC_ORIGIN }, body: { password: legacyPassword } })
+  assert.equal(rejectedLegacy.status, 401)
+
+  const wrongPassword = await call(noFallbackHandler, '/api/admin/login', { method: 'POST', headers: { origin: secureEnv.PUBLIC_ORIGIN }, body: { password: 'invalid synthetic password' } })
+  assert.equal(wrongPassword.status, 401)
+
+  const unconfigured = createSanityApiHandler({ env: { ...secureEnv, MANAGER_PASSWORD_HASH: '', ADMIN_PASSWORD_HASH: '' }, client: fakeClient(), writeClient: fakeClient(), seed, imageUrlBuilder })
+  const missingHash = await call(unconfigured, '/api/admin/login', { method: 'POST', headers: { origin: secureEnv.PUBLIC_ORIGIN }, body: { password: modernPassword } })
+  assert.equal(missingHash.status, 503)
+  assert.equal(missingHash.body.code, 'auth_unconfigured')
 })
 
 test('production manager login accepts only exact configured HTTPS origins before password verification', async () => {

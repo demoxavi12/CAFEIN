@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
+import bcrypt from 'bcryptjs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { readFile } from 'node:fs/promises'
 import os from 'node:os'
@@ -79,6 +80,23 @@ async function withApi(t, options = {}) {
     },
   }
 }
+
+test('local manager login accepts bcrypt and retains legacy scrypt login until the old hash is removed', async (t) => {
+  const modernPassword = 'synthetic bcrypt manager password'
+  const legacyPassword = 'synthetic legacy manager password'
+  const api = await withApi(t, {
+    env: {
+      MANAGER_PASSWORD_HASH: await bcrypt.hash(modernPassword, 4),
+      ADMIN_PASSWORD_HASH: await makePasswordHash(legacyPassword),
+    },
+  })
+  const modern = await api.request('/api/admin/login', { method: 'POST', body: { password: modernPassword } })
+  assert.equal(modern.response.status, 200)
+  const legacy = await api.request('/api/admin/login', { method: 'POST', body: { password: legacyPassword } })
+  assert.equal(legacy.response.status, 200)
+  const wrong = await api.request('/api/admin/login', { method: 'POST', body: { password: 'invalid synthetic password' } })
+  assert.equal(wrong.response.status, 401)
+})
 
 const imageStore = {
   publicBase: 'https://images.cafein.test',

@@ -1,15 +1,13 @@
-﻿import { createHmac, randomBytes, timingSafeEqual, scrypt as scryptCallback } from 'node:crypto'
-import { promisify } from 'node:util'
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { createClient } from '@sanity/client'
 import defaultImageUrlBuilder from '@sanity/image-url'
 import { createHash } from 'node:crypto'
+import { hasManagerPasswordConfig, verifyManagerPassword } from './password-auth.mjs'
 import { MenuStoreError } from './menu-store.mjs'
 import { getCategoryForMenuSection, getMenuSectionMappings } from '../shared/menu-taxonomy.mjs'
 
-const scrypt = promisify(scryptCallback)
 const COOKIE = 'cafein_admin_session'
 const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
-const SCRYPT_OPTIONS = { N: 1 << 17, r: 8, p: 1, maxmem: 256 * 1024 * 1024 }
 const itemQuery = '*[_type == "menuItem"] | order(order asc){_id,_rev,_updatedAt,id,name,price,"categoryId":category->id,section,description,"image":image{asset,alt,objectPosition,"width":asset->metadata.dimensions.width,"height":asset->metadata.dimensions.height},needsConfirmation,isSoldOut,isArchived,badge,order}'
 const categoryQuery = '*[_type == "menuCategory"] | order(order asc){_id,_rev,_updatedAt,id,"label":name,short,blurb,order}'
 
@@ -353,19 +351,14 @@ export function createSanityApiHandler({ env = process.env, client = createReadC
       }
       if (path === '/api/admin/login' && method === 'POST') {
         if (!originAllowed(req, env)) throw new MenuStoreError('Request origin is not allowed.', 403, 'origin_invalid')
-        if (!env.ADMIN_PASSWORD_HASH || !env.ADMIN_SESSION_SECRET || env.ADMIN_SESSION_SECRET.length < 32 || !writeClient) throw new MenuStoreError('Manager access is not configured.', 503, 'auth_unconfigured')
+        if (!hasManagerPasswordConfig(env) || !env.ADMIN_SESSION_SECRET || env.ADMIN_SESSION_SECRET.length < 32 || !writeClient) throw new MenuStoreError('Manager access is not configured.', 503, 'auth_unconfigured')
         const ip = String(req.headers['x-forwarded-for'] || 'unknown').split(',').at(-1).trim()
         const now = clock()
         const previous = attempts.get(ip)
         if (previous && now - previous.startedAt < 15 * 60_000 && previous.count >= 5) throw new MenuStoreError('Too many sign-in attempts. Try again later.', 429, 'rate_limited')
         const body = await readJson(req)
         const password = typeof body.password === 'string' ? body.password : ''
-        const [algorithm, salt, expected, extra] = env.ADMIN_PASSWORD_HASH.split('$')
-        let valid = false
-        if (algorithm === 'scrypt' && extra === undefined && /^[a-f0-9]{32,128}$/i.test(salt || '') && /^[a-f0-9]{128}$/i.test(expected || '') && password.length <= 256) {
-          const actual = await scrypt(password, Buffer.from(salt, 'hex'), 64, SCRYPT_OPTIONS)
-          valid = timingSafeEqual(actual, Buffer.from(expected, 'hex'))
-        }
+        const valid = await verifyManagerPassword(password, env)
         if (!valid) {
           const bucket = previous && now - previous.startedAt < 15 * 60_000 ? previous : { startedAt: now, count: 0 }
           bucket.count += 1

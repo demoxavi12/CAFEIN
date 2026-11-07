@@ -2,6 +2,7 @@ import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:cry
 import { isDeepStrictEqual, promisify } from 'node:util'
 import { createMenuStore, MenuStoreError, validateBackup } from './menu-store.mjs'
 import { createR2ImageStore, inspectMenuImage, MAX_MENU_IMAGE_BYTES } from './r2-images.mjs'
+import { hasManagerPasswordConfig, verifyManagerPassword } from './password-auth.mjs'
 
 const scrypt = promisify(scryptCallback)
 const SESSION_COOKIE = 'cafein_admin_session'
@@ -88,13 +89,6 @@ function constantTimeTextEqual(left, right) {
   const a = Buffer.from(left)
   const b = Buffer.from(right)
   return a.length === b.length && timingSafeEqual(a, b)
-}
-
-async function verifyPassword(password, encoded) {
-  const [algorithm, saltHex, expectedHex, extra] = String(encoded || '').split('$')
-  if (algorithm !== 'scrypt' || !/^[a-f0-9]{32,128}$/i.test(saltHex || '') || !/^[a-f0-9]{128}$/i.test(expectedHex || '') || extra !== undefined) return false
-  const actual = await scrypt(password, Buffer.from(saltHex, 'hex'), 64, SCRYPT_OPTIONS)
-  return timingSafeEqual(actual, Buffer.from(expectedHex, 'hex'))
 }
 
 function normalizeOrigin(req, configuredOrigin, requireConfiguredOrigin = false) {
@@ -198,7 +192,7 @@ export function createApiHandler({ seed, filePath, env = process.env, clock = ()
 
       if (pathname === '/api/admin/login' && method === 'POST') {
         if (!normalizeOrigin(req, env.PUBLIC_ORIGIN, env.NODE_ENV === 'production')) throw new MenuStoreError('Request origin is not allowed.', 403, 'origin_invalid')
-        if (!env.ADMIN_PASSWORD_HASH) throw new MenuStoreError('Manager sign-in is not configured.', 503, 'auth_unconfigured')
+        if (!hasManagerPasswordConfig(env)) throw new MenuStoreError('Manager sign-in is not configured.', 503, 'auth_unconfigured')
         const clientKey = getClientKey(req)
         const now = clock()
         if (loginAttempts.size > 10000) {
@@ -214,7 +208,7 @@ export function createApiHandler({ seed, filePath, env = process.env, clock = ()
         activePasswordChecks += 1
         let valid = false
         try {
-          valid = password.length <= 256 && await verifyPassword(password, env.ADMIN_PASSWORD_HASH)
+          valid = await verifyManagerPassword(password, env)
         } finally {
           activePasswordChecks -= 1
         }

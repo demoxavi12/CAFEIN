@@ -1,27 +1,20 @@
-﻿import test from 'node:test'
+import test from 'node:test'
 import assert from 'node:assert/strict'
-import { randomBytes, scrypt as scryptCallback } from 'node:crypto'
 import bcrypt from 'bcryptjs'
 import { readFileSync } from 'node:fs'
-import { promisify } from 'node:util'
 import adminApi from '../api/admin.mjs'
 import { createSanityApiHandler } from './sanity-api.mjs'
 import { restoreAdminPath } from './vercel-admin-route.mjs'
 import { loadSeedMenu } from './seed.mjs'
 import { getMenuSectionMappings, getCategoryForMenuSection } from '../shared/menu-taxonomy.mjs'
 
-const scrypt = promisify(scryptCallback)
-async function makePasswordHash(password) {
-  const salt = randomBytes(16)
-  const hash = await scrypt(password, salt, 64, { N: 1 << 17, r: 8, p: 1, maxmem: 256 * 1024 * 1024 })
-  return 'scrypt$' + salt.toString('hex') + '$' + hash.toString('hex')
-}
+const makeManagerPasswordHash = (password) => bcrypt.hash(password, 4)
 
 const categories = [{ id: 'beverages', label: 'Coffee & Beverages', short: 'Coffee', blurb: 'Coffee', _updatedAt: '2026-01-01T00:00:00Z', _id: 'drafts.menuCategory-beverages' }]
 const rawItem = { id: 'espresso', name: 'Espresso', price: 50, categoryId: 'beverages', section: 'Essence of Espresso', description: 'A short coffee.', isSoldOut: false, badge: 'Bestseller', order: 0, _updatedAt: '2026-01-02T00:00:00Z', _rev: 'espresso-rev-1', _id: 'drafts.menuItem-espresso', image: { asset: { _ref: 'image-abc123-1200x800-jpg' }, alt: 'Espresso', width: 1200, height: 800 } }
 const seed = { categories: categories.map(({ _id, _updatedAt, ...entry }) => entry), items: [{ id: 'fallback', name: 'Fallback', price: 10, category: 'beverages', section: 'Coffee', isSoldOut: false }, { id: 'canonical-espresso', name: 'Espresso', price: 50, category: 'beverages', section: 'Essence of Espresso', isSoldOut: false }] }
 const publishedSeed = { categories: seed.categories, items: [{ id: rawItem.id, name: rawItem.name, price: rawItem.price, category: rawItem.categoryId, section: rawItem.section, isSoldOut: false }] }
-const env = { NODE_ENV: 'development', PUBLIC_ORIGIN: 'https://cafe-in.test', ADMIN_PASSWORD_HASH: '', ADMIN_SESSION_SECRET: 's'.repeat(48), SANITY_API_TOKEN: 'server-only' }
+const env = { NODE_ENV: 'development', PUBLIC_ORIGIN: 'https://cafe-in.test', MANAGER_PASSWORD_HASH: '', ADMIN_SESSION_SECRET: 's'.repeat(48), SANITY_API_TOKEN: 'server-only' }
 const imageUrlBuilder = () => ({ image: (image) => ({ auto: () => ({ fit: () => ({ url: () => 'https://cdn.sanity.io/images/kgt3bhzl/production/' + image.asset._ref }) }) }) })
 
 test('Vercel routes menu deep links to the SPA and bundles the API seed', () => {
@@ -88,7 +81,7 @@ test('canonical menu sections map to their existing parent categories without am
 })
 
 test('admin menu writes derive category from the selected section and reject unknown sections', async () => {
-  const secureEnv = { ...env, ADMIN_PASSWORD_HASH: await makePasswordHash('test password') }
+  const secureEnv = { ...env, MANAGER_PASSWORD_HASH: await makeManagerPasswordHash('test password') }
   const canonical = loadSeedMenu()
   const categoryDocs = canonical.categories.map((category) => ({ id: category.id, label: category.label, short: category.short, blurb: category.blurb, _updatedAt: '2026-01-01T00:00:00Z', _id: `drafts.menuCategory-${category.id}` }))
   const taxonomySeed = { categories: canonical.categories, items: canonical.items }
@@ -210,18 +203,16 @@ test('unknown API routes return sanitized JSON 404 responses', async () => {
 })
 
 test('manager authentication fails closed without configured Sanity writes', async () => {
-  const handler = createSanityApiHandler({ env: { ...env, ADMIN_PASSWORD_HASH: 'configured' }, client: fakeClient(), writeClient: null, seed, imageUrlBuilder })
+  const handler = createSanityApiHandler({ env: { ...env, MANAGER_PASSWORD_HASH: await makeManagerPasswordHash('synthetic password') }, client: fakeClient(), writeClient: null, seed, imageUrlBuilder })
   const result = await call(handler, '/api/admin/login', { method: 'POST', headers: { origin: env.PUBLIC_ORIGIN }, body: { password: 'secret' } })
   assert.equal(result.status, 503)
 })
 
-test('Vercel manager login accepts the bcrypt hash and retains legacy scrypt fallback until removed', async () => {
+test('Vercel manager login accepts the configured bcrypt hash and rejects an incorrect password', async () => {
   const modernPassword = 'synthetic bcrypt manager password'
-  const legacyPassword = 'synthetic legacy manager password'
   const secureEnv = {
     ...env,
-    MANAGER_PASSWORD_HASH: await bcrypt.hash(modernPassword, 4),
-    ADMIN_PASSWORD_HASH: await makePasswordHash(legacyPassword),
+    MANAGER_PASSWORD_HASH: await makeManagerPasswordHash(modernPassword),
   }
   const handler = createSanityApiHandler({ env: secureEnv, client: fakeClient(), writeClient: fakeClient(), seed, imageUrlBuilder })
 
@@ -229,20 +220,18 @@ test('Vercel manager login accepts the bcrypt hash and retains legacy scrypt fal
   assert.equal(modernLogin.status, 200)
   assert.match(modernLogin.headers['Set-Cookie'], /HttpOnly; SameSite=Strict/)
 
-  const legacyLogin = await call(handler, '/api/admin/login', { method: 'POST', headers: { origin: secureEnv.PUBLIC_ORIGIN }, body: { password: legacyPassword } })
-  assert.equal(legacyLogin.status, 200)
-
-  const noFallbackHandler = createSanityApiHandler({ env: { ...secureEnv, ADMIN_PASSWORD_HASH: '' }, client: fakeClient(), writeClient: fakeClient(), seed, imageUrlBuilder })
-  const rejectedLegacy = await call(noFallbackHandler, '/api/admin/login', { method: 'POST', headers: { origin: secureEnv.PUBLIC_ORIGIN }, body: { password: legacyPassword } })
-  assert.equal(rejectedLegacy.status, 401)
-
-  const wrongPassword = await call(noFallbackHandler, '/api/admin/login', { method: 'POST', headers: { origin: secureEnv.PUBLIC_ORIGIN }, body: { password: 'invalid synthetic password' } })
+  const wrongPassword = await call(handler, '/api/admin/login', { method: 'POST', headers: { origin: secureEnv.PUBLIC_ORIGIN }, body: { password: 'invalid synthetic password' } })
   assert.equal(wrongPassword.status, 401)
 
-  const unconfigured = createSanityApiHandler({ env: { ...secureEnv, MANAGER_PASSWORD_HASH: '', ADMIN_PASSWORD_HASH: '' }, client: fakeClient(), writeClient: fakeClient(), seed, imageUrlBuilder })
+  const unconfigured = createSanityApiHandler({ env: { ...secureEnv, MANAGER_PASSWORD_HASH: '' }, client: fakeClient(), writeClient: fakeClient(), seed, imageUrlBuilder })
   const missingHash = await call(unconfigured, '/api/admin/login', { method: 'POST', headers: { origin: secureEnv.PUBLIC_ORIGIN }, body: { password: modernPassword } })
   assert.equal(missingHash.status, 503)
   assert.equal(missingHash.body.code, 'auth_unconfigured')
+
+  const malformed = createSanityApiHandler({ env: { ...secureEnv, MANAGER_PASSWORD_HASH: 'malformed-bcrypt-hash' }, client: fakeClient(), writeClient: fakeClient(), seed, imageUrlBuilder })
+  const invalidConfig = await call(malformed, '/api/admin/login', { method: 'POST', headers: { origin: secureEnv.PUBLIC_ORIGIN }, body: { password: modernPassword } })
+  assert.equal(invalidConfig.status, 503)
+  assert.equal(invalidConfig.body.code, 'auth_unconfigured')
 })
 
 test('production manager login accepts only exact configured HTTPS origins before password verification', async () => {
@@ -250,7 +239,7 @@ test('production manager login accepts only exact configured HTTPS origins befor
     ...env,
     NODE_ENV: 'production',
     PUBLIC_ORIGIN: 'https://cafe-in-eight.vercel.app, https://www.cafein.co.in',
-    ADMIN_PASSWORD_HASH: 'invalid-hash-for-origin-test',
+    MANAGER_PASSWORD_HASH: await makeManagerPasswordHash('origin test configured password'),
   }
   const handler = createSanityApiHandler({ env: secureEnv, client: fakeClient(), writeClient: fakeClient(), seed, imageUrlBuilder })
 
@@ -268,8 +257,8 @@ test('production manager login accepts only exact configured HTTPS origins befor
 })
 
 test('manager writes require a signed session, same-site origin, and CSRF token', async () => {
-  const passwordHash = await makePasswordHash('test password')
-  const secureEnv = { ...env, ADMIN_PASSWORD_HASH: passwordHash }
+  const passwordHash = await makeManagerPasswordHash('test password')
+  const secureEnv = { ...env, MANAGER_PASSWORD_HASH: passwordHash }
   const handler = createSanityApiHandler({ env: secureEnv, client: fakeClient(), writeClient: fakeClient(), seed, imageUrlBuilder })
   const login = await call(handler, '/api/admin/login', { method: 'POST', headers: { origin: secureEnv.PUBLIC_ORIGIN }, body: { password: 'test password' } })
   assert.equal(login.status, 200)
@@ -292,7 +281,7 @@ test('invalid Sanity data produces a safe menu fallback instead of leaking draft
 })
 
 test('manager menu saves persist a draft and do not publish implicitly', async () => {
-  const secureEnv = { ...env, ADMIN_PASSWORD_HASH: await makePasswordHash('test password') }
+  const secureEnv = { ...env, MANAGER_PASSWORD_HASH: await makeManagerPasswordHash('test password') }
   let savedDocument
   let publishCalls = 0
   const writeClient = fakeClient()
@@ -317,7 +306,7 @@ test('manager menu saves persist a draft and do not publish implicitly', async (
 })
 
 test('updating an existing draft uses its revision and never blindly replaces it', async () => {
-  const secureEnv = { ...env, ADMIN_PASSWORD_HASH: await makePasswordHash('test password') }
+  const secureEnv = { ...env, MANAGER_PASSWORD_HASH: await makeManagerPasswordHash('test password') }
   const existingDraft = { _id: 'drafts.menuItem-espresso', _rev: 'revision-before-edit' }
   let guardedRevision
   let createOrReplaceCalls = 0
@@ -355,7 +344,7 @@ test('manager endpoints reject missing authentication and tampered session cooki
 })
 
 test('Vercel manager blocks published item deletion until a reviewed Studio workflow exists', async () => {
-  const secureEnv = { ...env, ADMIN_PASSWORD_HASH: await makePasswordHash('test password') }
+  const secureEnv = { ...env, MANAGER_PASSWORD_HASH: await makeManagerPasswordHash('test password') }
   let mutations = 0
   const writeClient = fakeClient()
   writeClient.transaction = () => { mutations += 1; return fakeClient().transaction() }
@@ -373,7 +362,7 @@ test('Vercel manager blocks published item deletion until a reviewed Studio work
 })
 
 test('archive and restore are authenticated, revision guarded, idempotent draft-only operations', async () => {
-  const secureEnv = { ...env, ADMIN_PASSWORD_HASH: await makePasswordHash('test password') }
+  const secureEnv = { ...env, MANAGER_PASSWORD_HASH: await makeManagerPasswordHash('test password') }
   const itemDocs = [{ ...rawItem }]
   let creates = 0
   let patches = 0
@@ -434,7 +423,7 @@ test('archive and restore are authenticated, revision guarded, idempotent draft-
 })
 
 test('archive routes reject invalid IDs and unsupported methods without mutation', async () => {
-  const secureEnv = { ...env, ADMIN_PASSWORD_HASH: await makePasswordHash('test password') }
+  const secureEnv = { ...env, MANAGER_PASSWORD_HASH: await makeManagerPasswordHash('test password') }
   let writes = 0
   const writeClient = fakeClient()
   writeClient.create = async () => { writes += 1 }
@@ -481,7 +470,7 @@ test('tracked-seed fallback also excludes IDs archived in drafts', async () => {
 })
 
 test('menu item validation rejects unsupported fields before persistence', async () => {
-  const secureEnv = { ...env, ADMIN_PASSWORD_HASH: await makePasswordHash('test password') }
+  const secureEnv = { ...env, MANAGER_PASSWORD_HASH: await makeManagerPasswordHash('test password') }
   let writes = 0
   const writeClient = fakeClient()
   writeClient.createOrReplace = async () => { writes += 1 }
@@ -500,7 +489,7 @@ test('menu item validation rejects unsupported fields before persistence', async
 })
 
 test('explicit publish orders categories first and holds the example record for review', async () => {
-  const secureEnv = { ...env, ADMIN_PASSWORD_HASH: await makePasswordHash('test password') }
+  const secureEnv = { ...env, MANAGER_PASSWORD_HASH: await makeManagerPasswordHash('test password') }
   const categoryDrafts = [{ ...categories[0], _id: 'drafts.menuCategory-beverages' }]
   const itemDrafts = [rawItem, { ...rawItem, id: 'example', _id: 'drafts.menuItem-example', name: 'Example' }]
   const actions = []
@@ -523,7 +512,7 @@ test('explicit publish orders categories first and holds the example record for 
 })
 
 test('authenticated image uploads validate bytes and store assets through Sanity', async () => {
-  const secureEnv = { ...env, ADMIN_PASSWORD_HASH: await makePasswordHash('test password') }
+  const secureEnv = { ...env, MANAGER_PASSWORD_HASH: await makeManagerPasswordHash('test password') }
   const bytes = Buffer.from('safe-test-image')
   let stored = 0
   const writeClient = fakeClient()
@@ -555,7 +544,7 @@ test('authenticated image uploads validate bytes and store assets through Sanity
 })
 
 test('image upload reuses a matching Sanity asset instead of creating a duplicate', async () => {
-  const secureEnv = { ...env, ADMIN_PASSWORD_HASH: await makePasswordHash('test password') }
+  const secureEnv = { ...env, MANAGER_PASSWORD_HASH: await makeManagerPasswordHash('test password') }
   const bytes = Buffer.from('same-image-bytes')
   let uploads = 0
   const writeClient = fakeClient()
@@ -581,7 +570,7 @@ test('public Sanity menu excludes the flagged example record', async () => {
 })
 
 test('backup removals are blocked before any Sanity document mutation', async () => {
-  const secureEnv = { ...env, ADMIN_PASSWORD_HASH: await makePasswordHash('test password') }
+  const secureEnv = { ...env, MANAGER_PASSWORD_HASH: await makeManagerPasswordHash('test password') }
   let writes = 0
   const writeClient = fakeClient()
   writeClient.transaction = () => { writes += 1; return fakeClient().transaction() }
@@ -602,7 +591,7 @@ test('backup removals are blocked before any Sanity document mutation', async ()
 })
 
 test('backup apply resumes with revision-guarded draft patches and deterministic creates', async () => {
-  const secureEnv = { ...env, ADMIN_PASSWORD_HASH: await makePasswordHash('test password') }
+  const secureEnv = { ...env, MANAGER_PASSWORD_HASH: await makeManagerPasswordHash('test password') }
   const mutations = []
   const writeClient = fakeClient()
   writeClient.transaction = () => ({

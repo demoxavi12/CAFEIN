@@ -20,7 +20,7 @@ The standalone Studio lives in `studio/`, configured for project `kgt3bhzl` and 
 
 The frontend's public Sanity client is configured in `src/digital-menu/sanityContent.ts` and uses anonymous published reads. Vercel serves the same-origin `/api/*` routes from `api/[...path].mjs`; `/api/menu` reads the published Sanity perspective and falls back to the tracked seed when no valid published menu is available. The Vercel Manager Portal stores edits as Sanity drafts and publishes only after an explicit manager confirmation. The standalone Node/JSON and R2 adapters remain as a local rollback path; they are not required by the Vercel deployment.
 
-Vercel Function secrets are documented in [the manager portal setup guide](docs/manager-portal-setup.md). Never expose `SANITY_API_TOKEN`, `ADMIN_PASSWORD_HASH`, or `ADMIN_SESSION_SECRET` through a `VITE_` variable or browser code. The local draft-preview endpoint remains a Vite development middleware and is not implemented by the production API function.
+Vercel Function secrets are documented in [the manager portal setup guide](docs/manager-portal-setup.md). Never expose `SANITY_API_TOKEN`, `MANAGER_PASSWORD_HASH`, or `ADMIN_SESSION_SECRET` through a `VITE_` variable or browser code. The local draft-preview endpoint remains a Vite development middleware and is not implemented by the production API function.
 
 ### Safe migration workflow
 

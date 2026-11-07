@@ -1,15 +1,13 @@
-import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
-import { isDeepStrictEqual, promisify } from 'node:util'
+import { randomBytes, timingSafeEqual } from 'node:crypto'
+import { isDeepStrictEqual } from 'node:util'
 import { createMenuStore, MenuStoreError, validateBackup } from './menu-store.mjs'
 import { createR2ImageStore, inspectMenuImage, MAX_MENU_IMAGE_BYTES } from './r2-images.mjs'
 import { hasManagerPasswordConfig, verifyManagerPassword } from './password-auth.mjs'
 
-const scrypt = promisify(scryptCallback)
 const SESSION_COOKIE = 'cafein_admin_session'
 const SESSION_IDLE_MS = 30 * 60 * 1000
 const SESSION_ABSOLUTE_MS = 8 * 60 * 60 * 1000
 const MAX_BODY_BYTES = 1024 * 1024
-const SCRYPT_OPTIONS = { N: 1 << 17, r: 8, p: 1, maxmem: 256 * 1024 * 1024 }
 
 function reply(res, status, body, headers = {}) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers })
@@ -354,8 +352,4 @@ export function createApiHandler({ seed, filePath, env = process.env, clock = ()
     const handled = await handle(req, res)
     if (!handled) next?.()
   }
-}
-
-export function makePasswordHash(password, salt = randomBytes(16)) {
-  return scrypt(password, salt, 64, SCRYPT_OPTIONS).then((hash) => `scrypt$${salt.toString('hex')}$${hash.toString('hex')}`)
 }

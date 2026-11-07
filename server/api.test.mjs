@@ -6,7 +6,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { readFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { createApiHandler, makePasswordHash } from './api.mjs'
+import { createApiHandler } from './api.mjs'
 import { convertLegacyMenuOverrides } from '../src/digital-menu/legacyMenuMigration.mjs'
 
 const categories = [{ id: 'beverages', label: 'Beverages', short: 'Coffee', blurb: 'Coffee and more.' }]
@@ -42,7 +42,7 @@ test('legacy browser menu edits convert to a validated full-menu backup', () => 
 
 async function withApi(t, options = {}) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'cafein-api-'))
-  const env = { ADMIN_PASSWORD_HASH: await makePasswordHash('correct horse battery staple'), NODE_ENV: 'test', ...options.env }
+  const env = { MANAGER_PASSWORD_HASH: await bcrypt.hash('correct horse battery staple', 4), NODE_ENV: 'test', ...options.env }
   let now = 1_000_000
   const handler = createApiHandler({ seed, filePath: path.join(dir, 'menu.json'), env, clock: () => now, imageStore: options.imageStore })
   const server = createServer((req, res) => void handler(req, res, () => res.writeHead(404).end()))
@@ -81,21 +81,24 @@ async function withApi(t, options = {}) {
   }
 }
 
-test('local manager login accepts bcrypt and retains legacy scrypt login until the old hash is removed', async (t) => {
+test('local manager login accepts only the configured bcrypt hash', async (t) => {
   const modernPassword = 'synthetic bcrypt manager password'
-  const legacyPassword = 'synthetic legacy manager password'
   const api = await withApi(t, {
     env: {
       MANAGER_PASSWORD_HASH: await bcrypt.hash(modernPassword, 4),
-      ADMIN_PASSWORD_HASH: await makePasswordHash(legacyPassword),
     },
   })
   const modern = await api.request('/api/admin/login', { method: 'POST', body: { password: modernPassword } })
   assert.equal(modern.response.status, 200)
-  const legacy = await api.request('/api/admin/login', { method: 'POST', body: { password: legacyPassword } })
-  assert.equal(legacy.response.status, 200)
   const wrong = await api.request('/api/admin/login', { method: 'POST', body: { password: 'invalid synthetic password' } })
   assert.equal(wrong.response.status, 401)
+})
+
+test('local manager login fails closed when MANAGER_PASSWORD_HASH is missing', async (t) => {
+  const api = await withApi(t, { env: { MANAGER_PASSWORD_HASH: '' } })
+  const result = await api.request('/api/admin/login', { method: 'POST', body: { password: 'synthetic password' } })
+  assert.equal(result.response.status, 503)
+  assert.equal(result.data.code, 'auth_unconfigured')
 })
 
 const imageStore = {

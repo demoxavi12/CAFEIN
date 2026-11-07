@@ -3,8 +3,7 @@ import { Play, Sparkles } from 'lucide-react'
 import { useLiveMenu, type EnhancedMenuItem } from './adminStore'
 import { useCustomerTray } from './trayStore'
 import { DigitalMenuHeader } from './DigitalMenuHeader'
-import { ConceptDeckCarousel } from './ConceptDeckCarousel'
-import { ConceptRailCarousel } from './ConceptRailCarousel'
+import { CategoryMenu } from './CategoryMenu'
 import { DigitalMenuDetailSheet } from './DigitalMenuDetailSheet'
 import { DigitalMenuSearchModal } from './DigitalMenuSearchModal'
 import { DigitalMenuAdminModal } from './DigitalMenuAdminModal'
@@ -12,6 +11,7 @@ import { TableOrderTrayModal } from './TableOrderTrayModal'
 import { OrderTrayFloatingBar } from './OrderTrayFloatingBar'
 import { CafeAtmosphereModal } from './CafeAtmosphereModal'
 import { isLocalDraftPreviewRequested } from './sanityPreview'
+import './digital-menu-theme.css'
 
 interface Props {
   onExitMenu: () => void
@@ -19,15 +19,9 @@ interface Props {
 
 export function DigitalMenuView({ onExitMenu }: Props) {
   const draftPreview = isLocalDraftPreviewRequested()
-  const { items, loading: menuLoading, error: menuError, dataSource, previewError, previewSummary } = useLiveMenu({ draftPreview })
+  const { items, categories, loading: menuLoading, error: menuError, dataSource, previewError, previewSummary } = useLiveMenu({ draftPreview })
   const { tray, addItem, removeItem, clearTray } = useCustomerTray()
 
-  // Initialize state directly from URL search params without cascading effects
-  const [mode, setMode] = useState<'deck' | 'rails'>(() => {
-    if (typeof window === 'undefined') return 'deck'
-    const params = new URLSearchParams(window.location.search)
-    return params.get('concept') === 'rails' ? 'rails' : 'deck'
-  })
   const [selectedItem, setSelectedItem] = useState<EnhancedMenuItem | null>(null)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isAdminOpen, setIsAdminOpen] = useState(() => {
@@ -44,22 +38,18 @@ export function DigitalMenuView({ onExitMenu }: Props) {
   })
 
   return (
-    <div className="min-h-screen bg-espresso text-ivory flex flex-col font-sans selection:bg-bronze selection:text-espresso pb-20">
+    <div className="digital-menu-theme min-h-screen bg-espresso text-ivory flex flex-col font-sans selection:bg-bronze selection:text-espresso pb-24">
       {/* Mobile-first Header */}
       <DigitalMenuHeader
-        mode={mode}
-        onModeChange={setMode}
         onOpenSearch={() => setIsSearchOpen(true)}
         onOpenAdmin={() => setIsAdminOpen(true)}
         showAdminButton={dataSource === 'legacy'}
         onExitMenu={onExitMenu}
         tableNumber={tableNumber}
         setTableNumber={setTableNumber}
+        selectedCount={Object.values(tray).reduce((total, quantity) => total + quantity, 0)}
+        onOpenTray={() => setIsTrayModalOpen(true)}
       />
-
-      <div className="mx-auto w-full max-w-5xl px-3 pt-4 sm:px-6 sm:pt-5">
-        <h1 className="font-display text-2xl leading-tight text-ivory sm:text-3xl">In-Café Menu</h1>
-      </div>
 
       {draftPreview && (
         <div role={previewError ? 'alert' : 'status'} className="mx-auto mt-3 w-full max-w-5xl px-3 sm:px-6">
@@ -73,21 +63,21 @@ export function DigitalMenuView({ onExitMenu }: Props) {
         </div>
       )}
 
-      {/* Atmosphere Reel Teaser Banner */}
-      <div className="w-full max-w-5xl mx-auto px-3 pt-3 sm:px-6">
+      {/* Keep the atmosphere reel available as a quiet utility link. */}
+      <div className="digital-menu-atmosphere mx-auto w-full max-w-5xl px-4 pt-2 sm:px-6">
         <button
           type="button"
           onClick={() => setIsAtmosphereOpen(true)}
           aria-label="Play the Cafe In atmosphere video"
-          className="group relative flex w-full items-center justify-between gap-3 overflow-hidden rounded-2xl border border-ivory/12 bg-gradient-to-r from-mocha via-espresso-2 to-mocha p-2.5 text-left shadow-lg transition-all duration-300 hover:border-bronze/50 hover:shadow-bronze/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bronze sm:p-3"
+          className="group relative flex w-full items-center justify-between gap-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bronze"
         >
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-bronze/20 text-bronze border border-bronze/40 group-hover:bg-bronze group-hover:text-espresso transition-colors">
+          <div className="digital-menu-atmosphere-content flex min-w-0 items-center gap-3">
+            <div className="digital-menu-atmosphere-icon relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-bronze/20 text-bronze border border-bronze/40 group-hover:bg-bronze group-hover:text-espresso transition-colors">
               <Play className="h-4 w-4 fill-current ml-0.5" />
               <span className="absolute -inset-1 rounded-xl border border-bronze/30 animate-pulse pointer-events-none" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="digital-menu-atmosphere-meta flex items-center gap-2">
                 <span className="text-[11px] uppercase font-mono tracking-widest text-bronze font-bold flex items-center gap-1">
                   <Sparkles aria-hidden="true" className="w-3 h-3" />
                   <span>Cafe In Experience</span>
@@ -109,8 +99,8 @@ export function DigitalMenuView({ onExitMenu }: Props) {
         </button>
       </div>
 
-      {/* Main Presentation Body */}
-      <main className="flex-1 w-full max-w-5xl mx-auto">
+      {/* Single category-based menu presentation */}
+      <main className="digital-menu-main mx-auto w-full max-w-[96rem] flex-1 lg:px-4 xl:px-8">
         {!menuLoading && !menuError && items.length > 0 && (
           <p className="mx-3 mt-3 flex items-center gap-2 text-xs text-ivory/65 sm:mx-6">
             <span aria-hidden="true" className="flex h-4 w-4 items-center justify-center rounded border border-emerald-500/80 bg-emerald-950/40 p-0.5">
@@ -126,16 +116,9 @@ export function DigitalMenuView({ onExitMenu }: Props) {
             <p className="font-display text-lg text-ivory">The menu is temporarily unavailable.</p>
             <p className="mt-2 text-sm text-ivory/60">{menuError}</p>
           </div>
-        ) : mode === 'deck' ? (
-          <ConceptDeckCarousel
-            items={items}
-            tray={tray}
-            onSelect={setSelectedItem}
-            onAdd={addItem}
-            onRemove={removeItem}
-          />
         ) : (
-          <ConceptRailCarousel
+          <CategoryMenu
+            categories={categories}
             items={items}
             tray={tray}
             onSelect={setSelectedItem}

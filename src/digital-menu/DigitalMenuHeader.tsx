@@ -1,27 +1,27 @@
-import { motion } from 'motion/react'
 import { Wordmark } from '../components/Wordmark'
 import { images } from '../data/images'
+import { ShoppingBag } from 'lucide-react'
 
 interface Props {
-  mode: 'deck' | 'rails'
-  onModeChange: (m: 'deck' | 'rails') => void
   onOpenSearch: () => void
   onOpenAdmin: () => void
   showAdminButton: boolean
   onExitMenu: () => void
   tableNumber: string
   setTableNumber: (t: string) => void
+  selectedCount: number
+  onOpenTray: () => void
 }
 
 export function DigitalMenuHeader({
-  mode,
-  onModeChange,
   onOpenSearch,
   onOpenAdmin,
   showAdminButton,
   onExitMenu,
   tableNumber,
   setTableNumber,
+  selectedCount,
+  onOpenTray,
 }: Props) {
   return (
     <header className="sticky top-0 z-40 w-full border-b border-ivory/10 bg-espresso/90 backdrop-blur-md">
@@ -58,26 +58,45 @@ export function DigitalMenuHeader({
       </div>
 
       {/* Main Bar */}
-      <div className="flex items-center justify-between px-3 py-2.5 sm:px-6">
+      <div className="digital-menu-header__main flex items-center justify-between gap-2 px-3 py-2.5 sm:px-6">
         <div className="flex items-center gap-3">
           {/* Logo medallion */}
-          <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full border border-bronze/40 p-0.5 shadow-md">
-            <img
-              src={images.logoMedallion.src}
-              alt="Cafe In"
-              className="h-full w-full rounded-full object-cover"
-            />
+          <div className="relative h-10 w-10 shrink-0 rounded-full border border-bronze/40 p-0.5 shadow-md sm:h-11 sm:w-11">
+            <div className="absolute inset-[9%] overflow-hidden rounded-full bg-[#f4e8d7]">
+              <img
+                src={images.logoMedallion.src}
+                alt="Cafe In"
+                width={images.logoMedallion.width}
+                height={images.logoMedallion.height}
+                decoding="async"
+                className="absolute left-1/2 top-1/2 h-auto w-[145%] max-w-none -translate-x-1/2 -translate-y-1/2 object-contain"
+              />
+            </div>
           </div>
-          <div>
+          <div className="digital-menu-header__brand min-w-0">
             <Wordmark className="text-base text-ivory leading-tight" />
             <p className="text-xs tracking-widest text-bronze font-mono uppercase">
               Coffee • Vibes • Memories
             </p>
+            <h1 className="digital-menu-header__title">In-Café Menu</h1>
           </div>
         </div>
 
         {/* Action icons */}
-        <div className="flex items-center gap-2">
+        <div className="digital-menu-header__actions flex shrink-0 items-center gap-2">
+          {selectedCount > 0 && (
+            <button
+              type="button"
+              onClick={onOpenTray}
+              aria-label={`View selected items, ${selectedCount} ${selectedCount === 1 ? 'item' : 'items'}`}
+              className="digital-menu-header__tray relative flex h-11 w-11 items-center justify-center rounded-full border border-bronze/35 bg-ivory/5 text-bronze transition-colors hover:bg-mocha focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze"
+            >
+              <ShoppingBag aria-hidden="true" className="h-4 w-4" />
+              <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-olive px-1 text-[10px] font-bold text-white">
+                {selectedCount}
+              </span>
+            </button>
+          )}
           {/* Search trigger */}
           <button
             type="button"
@@ -105,51 +124,6 @@ export function DigitalMenuHeader({
         </div>
       </div>
 
-      {/* Concept Switcher Ribbon (The 2 variations for the owner to preview) */}
-      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 border-t border-ivory/10 bg-black/20 px-3 py-2 sm:px-6">
-        <span className="text-xs uppercase tracking-wider text-ivory/60 font-medium">
-          Menu Experience:
-        </span>
-        <div className="flex items-center rounded-full bg-ivory/10 p-0.5 text-xs font-semibold">
-          <button
-            type="button"
-            onClick={() => onModeChange('deck')}
-            className={`relative min-h-11 rounded-full px-3 py-1 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze ${
-              mode === 'deck' ? 'text-espresso font-bold' : 'text-ivory/70 hover:text-ivory'
-            }`}
-          >
-            {mode === 'deck' && (
-              <motion.span
-                layoutId="concept-pill"
-                className="absolute inset-0 rounded-full bg-bronze"
-                transition={{ type: 'spring', stiffness: 450, damping: 35 }}
-              />
-            )}
-            <span className="relative z-10 flex items-center gap-1.5">
-              <span>Deck Carousel</span>
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onModeChange('rails')}
-            className={`relative min-h-11 rounded-full px-3 py-1 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze ${
-              mode === 'rails' ? 'text-espresso font-bold' : 'text-ivory/70 hover:text-ivory'
-            }`}
-          >
-            {mode === 'rails' && (
-              <motion.span
-                layoutId="concept-pill"
-                className="absolute inset-0 rounded-full bg-bronze"
-                transition={{ type: 'spring', stiffness: 450, damping: 35 }}
-              />
-            )}
-            <span className="relative z-10 flex items-center gap-1.5">
-              <span>Gourmet Rails</span>
-            </span>
-          </button>
-        </div>
-      </div>
     </header>
   )
 }

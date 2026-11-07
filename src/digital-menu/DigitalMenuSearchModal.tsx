@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { EnhancedMenuItem } from './adminStore'
-import { MenuDishCard } from './MenuDishCard'
+import { InCafeMenuItemRow } from './InCafeMenuItemRow'
 import { trapTab } from '../lib/focusTrap'
 
 interface Props {
@@ -137,7 +137,7 @@ export function DigitalMenuSearchModal({
             </div>
           ) : (
             results.map((item) => (
-              <MenuDishCard
+              <InCafeMenuItemRow
                 key={item.id}
                 item={item}
                 quantityInTray={tray[item.id] ?? 0}

@@ -13,7 +13,7 @@ Set these in the Vercel project as server-only Production (and Preview only if t
 - SANITY_API_TOKEN: a Sanity token limited to the production dataset and only the permissions needed to read drafts, edit menu items, upload assets, and publish approved menu documents. Never prefix it with VITE_.
 - ADMIN_PASSWORD_HASH: output of npm run admin:hash; keep the generated manager password in the password manager and put only the scrypt hash in Vercel.
 - ADMIN_SESSION_SECRET: at least 32 random bytes, generated with a password manager or a secure random generator. This signs stateless HttpOnly sessions and is not the Sanity token.
-- PUBLIC_ORIGIN: the exact deployed HTTPS origin, such as https://cafe-in-eight.vercel.app.
+- PUBLIC_ORIGIN: one or more comma-separated exact deployed HTTPS origins, such as https://cafe-in-eight.vercel.app,https://www.cafein.co.in. Each origin is checked exactly; wildcards and non-HTTPS production origins are rejected.
 
 Public project configuration defaults to project kgt3bhzl, dataset production, and can be explicitly set with SANITY_PROJECT_ID and SANITY_DATASET. These IDs are not credentials.
 

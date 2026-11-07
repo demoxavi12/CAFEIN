@@ -85,8 +85,21 @@ function originAllowed(req, env) {
   if (env.NODE_ENV === 'production' && !env.PUBLIC_ORIGIN) return false
   try {
     const origin = new URL(req.headers.origin)
-    const expected = env.PUBLIC_ORIGIN ? new URL(env.PUBLIC_ORIGIN) : new URL((req.headers['x-forwarded-proto'] || 'https') + '://' + req.headers.host)
-    return origin.origin === expected.origin
+    if (origin.pathname !== '/' || origin.search || origin.hash || origin.username || origin.password) return false
+    if (env.NODE_ENV === 'production' && origin.protocol !== 'https:') return false
+    if (env.PUBLIC_ORIGIN) {
+      const allowedOrigins = env.PUBLIC_ORIGIN.split(',').map((configuredOrigin) => {
+        try {
+          const parsed = new URL(configuredOrigin.trim())
+          if (parsed.pathname !== '/' || parsed.search || parsed.hash || parsed.username || parsed.password) return null
+          if (env.NODE_ENV === 'production' && parsed.protocol !== 'https:') return null
+          return parsed.origin
+        } catch { return null }
+      }).filter(Boolean)
+      return allowedOrigins.includes(origin.origin)
+    }
+    const expected = new URL((req.headers['x-forwarded-proto'] || 'https') + '://' + req.headers.host)
+    return env.NODE_ENV !== 'production' && origin.origin === expected.origin
   } catch { return false }
 }
 

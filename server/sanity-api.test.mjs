@@ -214,6 +214,28 @@ test('manager authentication fails closed without configured Sanity writes', asy
   assert.equal(result.status, 503)
 })
 
+test('production manager login accepts only exact configured HTTPS origins before password verification', async () => {
+  const secureEnv = {
+    ...env,
+    NODE_ENV: 'production',
+    PUBLIC_ORIGIN: 'https://cafe-in-eight.vercel.app, https://www.cafein.co.in',
+    ADMIN_PASSWORD_HASH: 'invalid-hash-for-origin-test',
+  }
+  const handler = createSanityApiHandler({ env: secureEnv, client: fakeClient(), writeClient: fakeClient(), seed, imageUrlBuilder })
+
+  for (const origin of ['https://cafe-in-eight.vercel.app', 'https://www.cafein.co.in']) {
+    const accepted = await call(handler, '/api/admin/login', { method: 'POST', headers: { origin }, body: { password: 'not checked for origin test' } })
+    assert.equal(accepted.status, 401, `${origin} passes the origin gate and reaches credential verification`)
+    assert.equal(accepted.body.code, 'invalid_credentials')
+  }
+
+  for (const origin of ['https://attacker.invalid', 'http://www.cafein.co.in']) {
+    const rejected = await call(handler, '/api/admin/login', { method: 'POST', headers: { origin }, body: { password: 'not checked for origin test' } })
+    assert.equal(rejected.status, 403, `${origin} is rejected before credential verification`)
+    assert.equal(rejected.body.code, 'origin_invalid')
+  }
+})
+
 test('manager writes require a signed session, same-site origin, and CSRF token', async () => {
   const passwordHash = await makePasswordHash('test password')
   const secureEnv = { ...env, ADMIN_PASSWORD_HASH: passwordHash }

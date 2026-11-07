@@ -1,0 +1,13 @@
+{
+  "name": "Cafe In - Coffee, Vibes, Memories",
+  "short_name": "Cafe In",
+  "start_url": "/",
+  "scope": "/",
+  "display": "browser",
+  "background_color": "#F3EBDD",
+  "theme_color": "#17130F",
+  "icons": [
+    { "src": "/favicon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/favicon.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

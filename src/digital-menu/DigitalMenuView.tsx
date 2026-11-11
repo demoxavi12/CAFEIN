@@ -3,6 +3,7 @@ import { Play, Sparkles } from 'lucide-react'
 import { useLiveMenu, type EnhancedMenuItem } from './adminStore'
 import { useCustomerTray } from './trayStore'
 import { DigitalMenuHeader } from './DigitalMenuHeader'
+import { CafeInLogo } from '../components/CafeInLogo'
 import { CategoryMenu } from './CategoryMenu'
 import { DigitalMenuDetailSheet } from './DigitalMenuDetailSheet'
 import { DigitalMenuSearchModal } from './DigitalMenuSearchModal'
@@ -130,6 +131,9 @@ export function DigitalMenuView({ onExitMenu }: Props) {
 
       {/* In-Café Footer */}
       <footer className="mt-8 border-t border-ivory/10 px-4 py-8 text-center text-xs text-ivory/50 flex flex-col items-center gap-3">
+        <span className="block h-12 w-12 overflow-hidden rounded-full bg-[#f4e8d7] ring-1 ring-bronze/40">
+          <CafeInLogo />
+        </span>
         <p className="font-mono text-xs text-bronze uppercase tracking-widest">
           Cafe In • Coffee • Vibes • Memories
         </p>

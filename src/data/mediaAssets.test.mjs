@@ -46,11 +46,12 @@ test('intro and gallery optimized photo references resolve to WebP assets', asyn
 })
 
 test('intro videos, responsive hero photos, and the official logo resolve to optimized assets', async () => {
-  const [intro, hero, registry, html] = await Promise.all([
+  const [intro, hero, registry, html, manifestText] = await Promise.all([
     readFile(new URL('../components/IntroAnimation.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../sections/HeroSection.tsx', import.meta.url), 'utf8'),
     readFile(new URL('./images.ts', import.meta.url), 'utf8'),
     readFile(new URL('../../index.html', import.meta.url), 'utf8'),
+    readFile(new URL('../../public/site.webmanifest', import.meta.url), 'utf8'),
   ])
   const videoPath = '/videos/intro-combined.mp4'
   assert.match(intro, /const INTRO_VIDEO = "\/videos\/intro-combined\.mp4"/)
@@ -75,13 +76,35 @@ test('intro videos, responsive hero photos, and the official logo resolve to opt
   assert.match(hero, /<source[\s\S]*?type="image\/webp"[\s\S]*?srcSet=/)
   assert.match(hero, /sizes="\(min-width: 1280px\) 55vw, \(min-width: 768px\) 70vw, 95vw"/)
 
-  const logo = await readFile(new URL('../../public/images/optimized/logo-svg-medallion.webp', import.meta.url))
-  const sourceLogo = await stat(new URL('../../public/images/logo-svg-medallion.png', import.meta.url))
+  const logo = await readFile(new URL('../../public/images/optimized/cafe-in-official-logo.webp', import.meta.url))
+  const sourceLogo = await stat(new URL('../../public/images/logo-svg.png', import.meta.url))
   assert.equal(logo.subarray(8, 12).toString('ascii'), 'WEBP')
+  const dimensions = logo.readUInt32LE(21)
+  assert.equal((dimensions & 0x3fff) + 1, 1254, 'optimized official logo preserves its square width')
+  assert.equal(((dimensions >>> 14) & 0x3fff) + 1, 1254, 'optimized official logo preserves its square height')
   assert.ok(logo.byteLength < sourceLogo.size, 'lossless WebP logo is smaller than its PNG source')
-  assert.match(registry, /src: '\/images\/optimized\/logo-svg-medallion\.webp'/)
-  assert.match(html, /rel="preload" as="image" href="\/images\/optimized\/logo-svg-medallion\.webp" fetchpriority="high"/)
-  assert.match(html, /rel="preload" as="video" href="\/videos\/intro-combined\.mp4"/)
+  assert.match(registry, /src: '\/images\/optimized\/cafe-in-official-logo\.webp'/)
+  assert.match(html, /rel="preload"\s+as="image"\s+href="\/images\/optimized\/cafe-in-official-logo\.webp"\s+fetchpriority="high"/)
+  assert.match(html, /rel="icon" type="image\/png" href="\/favicon-16\.png" sizes="16x16"/)
+  assert.match(html, /rel="icon" type="image\/png" href="\/favicon-32\.png" sizes="32x32"/)
+  assert.match(html, /rel="apple-touch-icon" href="\/apple-touch-icon\.png" sizes="180x180"/)
+  assert.match(html, /rel="manifest" href="\/site\.webmanifest"/)
+  const manifest = JSON.parse(manifestText)
+  for (const icon of [
+    { path: '../../public/favicon-16.png', size: 16 },
+    { path: '../../public/favicon-32.png', size: 32 },
+    { path: '../../public/favicon-48.png', size: 48 },
+    { path: '../../public/apple-touch-icon.png', size: 180 },
+    { path: '../../public/favicon-192.png', size: 192 },
+    { path: '../../public/favicon.png', size: 512 },
+  ]) {
+    const image = await readFile(new URL(icon.path, import.meta.url))
+    assert.equal(image.subarray(0, 8).toString('hex'), '89504e470d0a1a0a')
+    assert.equal(image.readUInt32BE(16), icon.size, `${icon.size}px favicon width`)
+    assert.equal(image.readUInt32BE(20), icon.size, `${icon.size}px favicon height`)
+  }
+  assert.deepEqual(manifest.icons.map(({ sizes }) => sizes), ['192x192', '512x512'])
+  assert.match(html, /rel="preload"\s+as="video"\s+href="\/videos\/intro-combined\.mp4"/)
   assert.doesNotMatch(html, /rel="preload" as="video" href="\/videos\/intro-[1-4]\.mp4"/)
 })
 

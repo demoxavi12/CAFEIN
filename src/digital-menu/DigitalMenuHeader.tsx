@@ -1,5 +1,5 @@
 import { Wordmark } from '../components/Wordmark'
-import { images } from '../data/images'
+import { CafeInLogo } from '../components/CafeInLogo'
 import { ShoppingBag } from 'lucide-react'
 
 interface Props {
@@ -63,14 +63,7 @@ export function DigitalMenuHeader({
           {/* Logo medallion */}
           <div className="relative h-10 w-10 shrink-0 rounded-full border border-bronze/40 p-0.5 shadow-md sm:h-11 sm:w-11">
             <div className="absolute inset-[9%] overflow-hidden rounded-full bg-[#f4e8d7]">
-              <img
-                src={images.logoMedallion.src}
-                alt="Cafe In"
-                width={images.logoMedallion.width}
-                height={images.logoMedallion.height}
-                decoding="async"
-                className="absolute left-1/2 top-1/2 h-auto w-[145%] max-w-none -translate-x-1/2 -translate-y-1/2 object-contain"
-              />
+              <CafeInLogo className="scale-[.86]" />
             </div>
           </div>
           <div className="digital-menu-header__brand min-w-0">

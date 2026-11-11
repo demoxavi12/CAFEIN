@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from 'motion/react'
-import { images } from '../data/images'
+import { CafeInLogo } from './CafeInLogo'
 import { EASE_CINEMA, EASE_OUT } from '../lib/motion'
 
 interface Props {
@@ -18,7 +18,6 @@ interface Props {
  * it once as a quiet brand signature.
  */
 export function LogoMedallion({ play, delay = 0, className = '', decorative = false, layoutId }: Props) {
-  const logo = images.logoMedallion
   const reduceMotion = useReducedMotion()
   return (
     <motion.div
@@ -30,14 +29,7 @@ export function LogoMedallion({ play, delay = 0, className = '', decorative = fa
     >
       <div className="glass absolute inset-0 rounded-full" />
       <div className="absolute inset-[9%] overflow-hidden rounded-full bg-[#f4e8d7] shadow-[0_10px_30px_-12px_rgba(0,0,0,0.7)]">
-        <img
-          src={logo.src}
-          alt={decorative ? '' : logo.alt}
-          width={logo.width}
-          height={logo.height}
-          decoding="async"
-          className="absolute top-1/2 left-1/2 h-auto w-[145%] max-w-none -translate-x-1/2 -translate-y-1/2 object-contain"
-        />
+        <CafeInLogo decorative={decorative} loading="eager" className="scale-[.86]" />
       </div>
       <svg aria-hidden="true" viewBox="0 0 100 100" className="pointer-events-none absolute inset-0 h-full w-full -rotate-90">
         <motion.circle

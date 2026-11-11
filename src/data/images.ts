@@ -15,18 +15,12 @@ export interface ImageAsset {
 }
 
 export const images = {
-  logo: {
-    src: '/images/optimized/logo-svg-medallion.webp',
+  /** The original complete circular Cafe In artwork, optimized without cropping or recolouring. */
+  brandLogo: {
+    src: '/images/optimized/cafe-in-official-logo.webp',
     alt: 'Cafe In logo — Coffee • Vibes • Memories. Brew it. Love it. Live it!',
     width: 1254,
-    height: 850,
-  },
-  /** The supplied emblem padded to preserve the existing medallion image aspect ratio */
-  logoMedallion: {
-    src: '/images/optimized/logo-svg-medallion.webp',
-    alt: 'Cafe In logo — Coffee • Vibes • Memories. Brew it. Love it. Live it!',
-    width: 1254,
-    height: 850,
+    height: 1254,
   },
   lantern: {
     src: '/images/interior-lantern-pendant.webp',

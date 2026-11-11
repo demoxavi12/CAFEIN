@@ -1,9 +1,9 @@
 import type { MouseEvent } from 'react'
 import { business } from '../data/business'
-import { images } from '../data/images'
 import { navLinks } from '../data/nav'
 import { scrollToId } from '../lib/scroll'
 import { Wordmark } from './Wordmark'
+import { CafeInLogo } from './CafeInLogo'
 
 export function Footer() {
   const go = (id: string) => (e: MouseEvent) => {
@@ -19,14 +19,7 @@ export function Footer() {
           <div className="flex items-center gap-6 lg:col-span-5">
             {/* Original Cafe In logo, shown as a round medallion */}
             <span className="relative block h-24 w-24 shrink-0 overflow-hidden rounded-full bg-[#f4e8d7] ring-1 ring-bronze/40 sm:h-28 sm:w-28">
-              <img
-                src={images.logoMedallion.src}
-                alt={images.logoMedallion.alt}
-                width={images.logoMedallion.width}
-                height={images.logoMedallion.height}
-                loading="lazy"
-                className="absolute top-1/2 left-1/2 h-auto w-[145%] max-w-none -translate-x-1/2 -translate-y-1/2 object-contain"
-              />
+              <CafeInLogo className="scale-[.86]" />
             </span>
             <div>
               <Wordmark className="text-2xl text-ivory" />

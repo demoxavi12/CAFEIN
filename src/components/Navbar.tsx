@@ -9,6 +9,7 @@ import { trapTab } from '../lib/focusTrap'
 import { EASE_CINEMA, EASE_OUT } from '../lib/motion'
 import { scrollToId } from '../lib/scroll'
 import { Wordmark } from './Wordmark'
+import { CafeInLogo } from './CafeInLogo'
 
 // Observe every section so the highlight clears over sections without a nav link
 const sectionIds = ['top', 'specials', 'menu', 'story', 'gallery', 'reviews', 'visit']
@@ -76,7 +77,10 @@ export function Navbar() {
         aria-label="Primary"
         className="glass glass-nav flex h-16 items-center justify-between rounded-full border border-[#b18a55]/25 bg-[rgba(33,26,21,0.72)] pr-2 pl-4 shadow-[0_14px_42px_-28px_rgba(0,0,0,0.9)] sm:pl-5 lg:h-[68px]"
       >
-        <a href="#top" onClick={go('top')} className="relative z-10 text-lg text-ivory sm:text-xl">
+        <a href="#top" onClick={go('top')} className="relative z-10 flex items-center gap-2.5 text-lg text-ivory sm:gap-3 sm:text-xl">
+          <span className="block h-9 w-9 shrink-0 overflow-hidden rounded-full bg-[#f4e8d7] ring-1 ring-bronze/50 sm:h-10 sm:w-10">
+            <CafeInLogo decorative className="scale-[.86]" />
+          </span>
           <Wordmark />
         </a>
 

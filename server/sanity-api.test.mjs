@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import bcrypt from 'bcryptjs'
 import { readFileSync } from 'node:fs'
 import adminApi from '../api/admin.mjs'
-import { createSanityApiHandler } from './sanity-api.mjs'
+import { createReadClient, createSanityApiHandler } from './sanity-api.mjs'
 import { restoreAdminPath } from './vercel-admin-route.mjs'
 import { loadSeedMenu } from './seed.mjs'
 import { getMenuSectionMappings, getCategoryForMenuSection } from '../shared/menu-taxonomy.mjs'
@@ -159,7 +159,17 @@ test('public menu maps published Sanity content and image metadata', async () =>
   assert.equal(result.body.items[0].id, 'espresso')
   assert.equal(result.body.items[0].image.assetId, rawItem.image.asset._ref)
   assert.equal(result.body.items[0].image.alt, 'Espresso')
+  assert.equal(result.body.items[0].badge, 'Bestseller')
+  assert.equal(result.body.items[0].isSoldOut, false)
+  assert.equal(result.body.items[0].description, rawItem.description)
   assert.equal(result.body.categories[0].id, 'beverages')
+  assert.equal(result.headers['Cache-Control'], 'no-store')
+})
+
+test('public Sanity reads use the published perspective without CDN caching', () => {
+  const config = createReadClient({}).config()
+  assert.equal(config.perspective, 'published')
+  assert.equal(config.useCdn, false)
 })
 
 test('public menu falls back to the tracked seed when Sanity fails', async () => {

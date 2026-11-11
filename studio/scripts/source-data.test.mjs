@@ -32,6 +32,23 @@ test('specials preserve four real references and six temporary cards separately'
   assert.ok(data.specials.ids.every((id) => data.store.items.some((item) => item.id === id)))
 })
 
+test('homepage selection uses stable menu IDs without changing the migration special inventory', () => {
+  assert.deepEqual(data.homepageSpecials.map(({ key, menuItemId }) => [key, menuItemId]), [
+    ['cappuccino', 'cappuccino'],
+    ['classic-coffee-frappe', 'classic-coffee-frappe'],
+    ['iced-americano', 'iced-americano'],
+    ['strawberry-matcha', 'strawberry-matcha'],
+    ['floating-peach', 'floating-peach'],
+    ['brownie-frappe', 'brownie-frappe'],
+    ['caesar-salad', 'caesar-salad'],
+    ['blueberry-cheesecake', 'blueberry-cheesecake'],
+    ['paneer-subway', 'subway-paneer'],
+    ['aglio-olio-spaghetti', 'aglio-olio-spaghetti'],
+  ])
+  assert.equal(data.specials.ids.length, 4)
+  assert.equal(data.specialItems.filter(({ id }) => id.startsWith('temp-')).length, 6)
+})
+
 test('verified timestamped backup matches the live store and special lineup', async () => {
   const verified = await loadVerifiedBackupData(data)
   assert.equal(verified.store.items.length, 60)

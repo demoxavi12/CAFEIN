@@ -158,18 +158,20 @@ test('preview failures return a sanitized fallback message and do not leak proce
 
 test('draft access stays in authenticated local tooling while public reads and JSON fallback remain separate', async () => {
   const root = path.resolve(import.meta.dirname, '..')
-  const [previewScript, studioPackage, clientSource, storeSource, viteSource] = await Promise.all([
+  const [previewScript, studioPackage, clientSource, storeSource, viteSource, apiSource] = await Promise.all([
     readFile(path.join(root, 'studio/scripts/preview-drafts.mjs'), 'utf8'),
     readFile(path.join(root, 'studio/package.json'), 'utf8'),
     readFile(path.join(root, 'src/digital-menu/sanityContent.ts'), 'utf8'),
     readFile(path.join(root, 'src/digital-menu/adminStore.ts'), 'utf8'),
     readFile(path.join(root, 'vite.config.ts'), 'utf8'),
+    readFile(path.join(root, 'server/sanity-api.mjs'), 'utf8'),
   ])
   assert.match(studioPackage, /sanity exec scripts\/preview-drafts\.mjs --with-user-token/)
   assert.match(previewScript, /perspective:\s*'drafts'/)
   assert.match(previewScript, /useCdn:\s*false/)
-  assert.match(clientSource, /perspective:\s*'published'/)
-  assert.match(clientSource, /useCdn:\s*true/)
+  assert.match(apiSource, /perspective:\s*'published'/)
+  assert.match(apiSource, /useCdn:\s*false/)
+  assert.match(apiSource, /'Cache-Control': 'no-store'/)
   assert.match(storeSource, /fetchPublishedMenu/)
   assert.match(storeSource, /'\/api\/menu'/)
   assert.match(storeSource, /Preview failures continue through the existing published Sanity and JSON\/API fallback/)

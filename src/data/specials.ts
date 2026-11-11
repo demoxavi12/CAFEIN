@@ -6,48 +6,15 @@
  */
 import { menuItems, type MenuItem } from './menu'
 import { images } from './images'
+import { homepageSpecials, resolveHomepageSpecials } from './homepageSpecials.mjs'
+
+export { homepageSpecials, resolveHomepageSpecials }
+export type { HomepageSpecialCard } from './homepageSpecials.mjs'
 
 export const specials = {
   eyebrow: 'Signature Specials',
   title: 'Worth the detour',
   ids: ['biscoff-cheesecake', 'alfredo-penne', 'biscoff-latte', 'vietnamese-iced-coffee'],
-}
-
-/** Homepage-only featured order. These IDs resolve to existing menu records when available. */
-interface HomepageSpecialDefinition {
-  id: string
-  name: string
-  menuItemId?: string
-}
-
-export const homepageSpecials: HomepageSpecialDefinition[] = [
-  { id: 'cappuccino', name: 'Cappuccino', menuItemId: 'cappuccino' },
-  { id: 'classic-coffee-frappe', name: 'Classic Coffee Frappe', menuItemId: 'classic-coffee-frappe' },
-  { id: 'iced-americano', name: 'Iced Americano', menuItemId: 'iced-americano' },
-  { id: 'strawberry-matcha', name: 'Strawberry Matcha' },
-  { id: 'floating-peach', name: 'Floating Peach' },
-  { id: 'brownie-frappe', name: 'Brownie Frappe' },
-  { id: 'caesar-salad', name: 'Caesar Salad', menuItemId: 'caesar-salad' },
-  { id: 'blueberry-cheesecake', name: 'Blueberry Cheesecake', menuItemId: 'blueberry-cheesecake' },
-  { id: 'paneer-subway', name: 'Paneer Subway' },
-  { id: 'aglio-olio-spaghetti', name: 'Aglio Olio Spaghetti', menuItemId: 'aglio-olio-spaghetti' },
-]
-
-export type HomepageSpecialCard = {
-  id: string
-  name: string
-  menuItem?: MenuItem
-}
-
-export function resolveHomepageSpecials(items: MenuItem[]): HomepageSpecialCard[] {
-  return homepageSpecials.map(({ id, name, menuItemId }) => {
-    const menuItem = menuItemId ? items.find((item) => item.id === menuItemId) : undefined
-    return {
-      id,
-      name,
-      ...(menuItem ? { menuItem: menuItem.name === name ? menuItem : { ...menuItem, name } } : {}),
-    }
-  })
 }
 
 const verifiedFeaturedItems: MenuItem[] = specials.ids

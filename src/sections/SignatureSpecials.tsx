@@ -1,6 +1,6 @@
 import { motion } from 'motion/react'
-import { homepageSpecials, resolveHomepageSpecials, specials, type HomepageSpecialCard } from '../data/specials'
-import { formatPrice, menuItems, type MenuItem } from '../data/menu'
+import { resolveHomepageSpecials, specials, type HomepageSpecialCard } from '../data/specials'
+import { formatPrice, type MenuItem } from '../data/menu'
 import { useLiveMenu } from '../digital-menu/adminStore'
 import { SectionHeading } from '../components/SectionHeading'
 import { RevealImage } from '../components/RevealImage'
@@ -9,8 +9,7 @@ import { useMediaQuery } from '../hooks/useMediaQuery'
 import { EmberBackground } from '../components/EmberBackground'
 import { EASE_OUT } from '../lib/motion'
 import { useEffect, useRef, useState, type PointerEvent, type TouchEvent } from 'react'
-import type { PublishedSpecials } from '../digital-menu/sanityContent'
-import { fetchLocalDraftPreview, isLocalDraftPreviewRequested, type LocalDraftPreview } from '../digital-menu/sanityPreview'
+import { isLocalDraftPreviewRequested } from '../digital-menu/sanityPreview'
 
 interface Props {
   onSelect: (item: MenuItem) => void
@@ -23,13 +22,11 @@ const pad = (n: number) => String(n).padStart(2, '0')
 function SpecialCard({ item, index, total, tone, onSelect, slot, visible, stepVw, neighborScale, compact, reduceMotion }: { item: HomepageSpecialCard; index: number; total: number; tone: string; onSelect: (item: MenuItem) => void; slot: number; visible: boolean; stepVw: number; neighborScale: number; compact: boolean; reduceMotion: boolean }) {
   const menuItem = item.menuItem
   const accessible = visible && (!compact || slot === 0)
-  const label = menuItem
-    ? `${item.name}, ${formatPrice(menuItem.price)}${menuItem.needsConfirmation ? ' (details to be confirmed)' : ''} — view details`
-    : item.name
+  const label = `${menuItem.name}, ${formatPrice(menuItem.price)}${menuItem.needsConfirmation ? ' (details to be confirmed)' : ''}${menuItem.isSoldOut ? ' (sold out)' : ''} — view details`
   return (
     <motion.li
       aria-roledescription="slide"
-      aria-label={`${index + 1} of ${total}: ${item.name}`}
+      aria-label={`${index + 1} of ${total}: ${menuItem.name}`}
       aria-hidden={!accessible}
       inert={!accessible}
       data-slot={slot}
@@ -54,7 +51,7 @@ function SpecialCard({ item, index, total, tone, onSelect, slot, visible, stepVw
         transition={{ duration: 0.9, ease: EASE_OUT, delay: Math.min(index, 3) * 0.08 }}
       >
         <div className="relative overflow-hidden rounded-sm shadow-[0_26px_52px_-32px_rgba(0,0,0,0.72)] transition-[transform,box-shadow] duration-700 ease-[var(--ease-out-soft)] group-hover:-translate-y-1 group-hover:shadow-[0_34px_64px_-32px_rgba(0,0,0,0.78)] lg:h-[min(425px,calc(100svh-363px))]">
-          {menuItem?.image ? (
+          {menuItem.image ? (
             <RevealImage
               image={menuItem.image}
               className="aspect-[4/5] lg:aspect-auto lg:h-full"
@@ -70,9 +67,9 @@ function SpecialCard({ item, index, total, tone, onSelect, slot, visible, stepVw
                 aria-hidden="true"
                 className="specials-card-placeholder-ring absolute -top-2 -right-2 h-40 w-40 rounded-full border border-bronze/20 transition-transform duration-[1.4s] ease-[var(--ease-out-soft)] group-hover:scale-125"
               />
-              {menuItem?.section && <p className="label mb-3 text-bronze-light">From the menu</p>}
+              <p className="label mb-3 text-bronze-light">From the menu</p>
               <p aria-hidden="true" className="specials-card-placeholder-title display relative text-[clamp(2.4rem,4vw,3.4rem)] text-ivory italic">
-                {menuItem?.section ?? item.name}
+                {menuItem.section}
               </p>
             </div>
           )}
@@ -82,36 +79,38 @@ function SpecialCard({ item, index, total, tone, onSelect, slot, visible, stepVw
         <div className="specials-card-content flex flex-1 flex-col px-1 pt-6 lg:pt-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              {menuItem?.section && <p className="label text-bronze">{menuItem.section}</p>}
+              <p className="label text-bronze">{menuItem.section}</p>
               <h3 className="display mt-2 text-[1.9rem] leading-[1.05] sm:text-[2.1rem]">
-                {menuItem ? (
-                  <button
-                    type="button"
-                    onClick={() => onSelect(menuItem)}
-                    aria-label={label}
-                    className="text-left text-ivory after:absolute after:inset-0 after:rounded-sm after:content-[''] focus-visible:outline-none"
-                  >
-                    {item.name}
-                  </button>
-                ) : <span className="text-left text-ivory">{item.name}</span>}
+                <button
+                  type="button"
+                  onClick={() => onSelect(menuItem)}
+                  aria-label={label}
+                  className="text-left text-ivory after:absolute after:inset-0 after:rounded-sm after:content-[''] focus-visible:outline-none"
+                >
+                  {menuItem.name}
+                </button>
               </h3>
             </div>
-            {menuItem && <span className="display shrink-0 pt-5 text-[1.7rem] text-ivory-2">{formatPrice(menuItem.price)}</span>}
+            <span className="display shrink-0 pt-5 text-[1.7rem] text-ivory-2">{formatPrice(menuItem.price)}</span>
           </div>
           {/* Two-line slot keeps every card the same height */}
-          <p aria-hidden={!menuItem?.description} className={`mt-3 lg:mt-2 line-clamp-2 min-h-[3.25em] text-sm leading-relaxed ${menuItem?.description ? 'text-ivory-2' : 'text-transparent'}`}>
-            {menuItem?.description ?? '\u00a0'}
+          <p aria-hidden={!menuItem.description} className={`mt-3 lg:mt-2 line-clamp-2 min-h-[3.25em] text-sm leading-relaxed ${menuItem.description ? 'text-ivory-2' : 'text-transparent'}`}>
+            {menuItem.description ?? '\u00a0'}
           </p>
+          {(menuItem.badge || menuItem.isSoldOut) && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {menuItem.badge && <span className="label rounded-full border border-bronze/45 bg-bronze/10 px-2.5 py-1 text-bronze-light">{menuItem.badge}</span>}
+              {menuItem.isSoldOut && <span className="label rounded-full border border-ivory/20 px-2.5 py-1 text-ivory/65">Sold out</span>}
+            </div>
+          )}
           <div className="mt-5 lg:mt-2 flex items-center justify-between gap-3 border-t border-ivory/15 pt-4 lg:pt-2">
-            {menuItem?.needsConfirmation ? <ConfirmFlag note={menuItem.needsConfirmation} tone="light" /> : <span />}
-            {menuItem && (
-              <span className="label inline-flex items-center gap-2 text-ivory/70 transition-colors group-hover:text-ivory">
-                View details
-                <span aria-hidden="true" className="transition-transform duration-500 group-hover:translate-x-1">
-                  →
-                </span>
+            {menuItem.needsConfirmation ? <ConfirmFlag note={menuItem.needsConfirmation} tone="light" /> : <span />}
+            <span className="label inline-flex items-center gap-2 text-ivory/70 transition-colors group-hover:text-ivory">
+              View details
+              <span aria-hidden="true" className="transition-transform duration-500 group-hover:translate-x-1">
+                →
               </span>
-            )}
+            </span>
           </div>
         </div>
       </motion.article>
@@ -136,48 +135,14 @@ function Arrow({ dir }: { dir: 'prev' | 'next' }) {
 
 export function SignatureSpecials({ onSelect }: Props) {
   const draftPreview = isLocalDraftPreviewRequested()
-  const { items: liveMenuItems, dataSource, previewError, previewSummary } = useLiveMenu({ draftPreview })
-  const [publishedSpecials, setPublishedSpecials] = useState<PublishedSpecials | null>(null)
-  const [draftSpecials, setDraftSpecials] = useState<LocalDraftPreview['specials'] | null>(null)
-  useEffect(() => {
-    let active = true
-    if (draftPreview) {
-      const refreshDrafts = () => {
-        void fetchLocalDraftPreview().then((result) => {
-          if (active) setDraftSpecials((current) => JSON.stringify(current) === JSON.stringify(result.specials) ? current : result.specials)
-        }).catch(() => {
-          // The menu hook displays the preview error and keeps the existing published/JSON fallback available.
-        })
-      }
-      refreshDrafts()
-      const draftTimer = window.setInterval(refreshDrafts, 30_000)
-      return () => { active = false; window.clearInterval(draftTimer) }
-    }
-    const refresh = () => {
-      void import('../digital-menu/sanityContent').then(({ fetchPublishedSpecials }) => fetchPublishedSpecials()).then((result) => {
-        if (active && result) setPublishedSpecials((current) => JSON.stringify(current) === JSON.stringify(result) ? current : result)
-      }).catch(() => {
-        if (active) setPublishedSpecials(null)
-        // Use only the currently verified active menu-backed selection when published specials are unavailable.
-      })
-    }
-    refresh()
-    const timer = window.setInterval(refresh, 30_000)
-    return () => { active = false; window.clearInterval(timer) }
-  }, [draftPreview])
-  const remoteSpecialItems = draftPreview ? draftSpecials?.items : publishedSpecials?.items
-  const remoteSelectionMatches = remoteSpecialItems?.length === homepageSpecials.length
-    && remoteSpecialItems.every((item, index) => item.name.toLocaleLowerCase() === homepageSpecials[index].name.toLocaleLowerCase())
-  const featuredItems: HomepageSpecialCard[] = remoteSelectionMatches && remoteSpecialItems
-    ? remoteSpecialItems.map((menuItem, index) => ({
-        id: homepageSpecials[index].id,
-        name: homepageSpecials[index].name,
-        menuItem,
-      }))
-    : resolveHomepageSpecials([...liveMenuItems, ...menuItems])
+  const { items: liveMenuItems, dataSource, previewError, previewSummary, loading } = useLiveMenu({ draftPreview })
+  const featuredItems = resolveHomepageSpecials(liveMenuItems)
   const total = featuredItems.length
   const [activeIndex, setActiveIndex] = useState(0)
-  const step = (direction: 1 | -1) => setActiveIndex((current) => (current + direction + total) % total)
+  const currentIndex = total ? activeIndex % total : 0
+  const step = (direction: 1 | -1) => {
+    if (total > 1) setActiveIndex((current) => ((current % total) + direction + total) % total)
+  }
   const supportsEdgePointer = useMediaQuery('(hover: hover) and (pointer: fine)')
   const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const compact = useMediaQuery('(max-width: 639px)')
@@ -187,7 +152,7 @@ export function SignatureSpecials({ onSelect }: Props) {
   const pendingEdgeDirection = useRef<1 | -1 | 0>(0)
   const touchStartX = useRef<number | null>(null)
   let typographic = 0
-  const tones = featuredItems.map((item) => (item.menuItem?.image ? '' : panelTones[typographic++ % panelTones.length]))
+  const tones = featuredItems.map((item) => (item.menuItem.image ? '' : panelTones[typographic++ % panelTones.length]))
   const visibleSlots = compact || tablet ? 1 : 2
   const stepVw = compact ? 43 : tablet ? 31 : 21
   const canScroll = total > 1
@@ -255,7 +220,7 @@ export function SignatureSpecials({ onSelect }: Props) {
     <section id="specials" aria-labelledby="specials-title" className="relative isolate overflow-hidden bg-espresso-2 py-16 text-ivory sm:py-20 lg:py-20">
       <EmberBackground strength="warm" />
       <div className="container-x relative z-10">
-        <SectionHeading id="specials-title" eyebrow={publishedSpecials?.eyebrow ?? specials.eyebrow} title="There's always room for something special." />
+        <SectionHeading id="specials-title" eyebrow={specials.eyebrow} title="There's always room for something special." />
         {draftPreview && (
           <p role={previewError ? 'alert' : 'status'} className={`mt-4 text-sm ${previewError ? 'text-amber-200' : 'text-ivory-2/75'}`}>
             {previewError
@@ -268,7 +233,7 @@ export function SignatureSpecials({ onSelect }: Props) {
       </div>
 
       <div role="region" aria-roledescription="carousel" aria-label="Signature specials" className="relative z-10 mx-auto mt-8 w-full max-w-[1200px] sm:mt-10 lg:mt-8">
-        <ul
+        {total > 0 && <ul
           tabIndex={0}
           aria-label="Signature specials — use the left and right arrow keys or swipe to browse"
           className="specials-track no-scrollbar focus-visible:outline-offset-[-2px]"
@@ -296,51 +261,57 @@ export function SignatureSpecials({ onSelect }: Props) {
               total={total}
               tone={tones[i]}
               onSelect={onSelect}
-              slot={((i - activeIndex + total + Math.floor(total / 2)) % total) - Math.floor(total / 2)}
-              visible={Math.abs(((i - activeIndex + total + Math.floor(total / 2)) % total) - Math.floor(total / 2)) <= visibleSlots}
+              slot={((i - currentIndex + total + Math.floor(total / 2)) % total) - Math.floor(total / 2)}
+              visible={Math.abs(((i - currentIndex + total + Math.floor(total / 2)) % total) - Math.floor(total / 2)) <= visibleSlots}
               stepVw={stepVw}
               neighborScale={compact ? 0.96 : 0.84}
               compact={compact}
               reduceMotion={reduceMotion}
             />
           ))}
-        </ul>
+        </ul>}
 
-        <div className={`mt-3 flex justify-center gap-3 sm:mt-4 lg:mt-2 ${canScroll ? '' : 'invisible'}`}>
-          <button
-            type="button"
-            onClick={() => step(-1)}
-            aria-label="Previous specials"
-            className="glass glass-control text-ivory"
-          >
-            <Arrow dir="prev" />
-          </button>
-          <button
-            type="button"
-            onClick={() => step(1)}
-            aria-label="Next specials"
-            className="glass glass-control text-ivory"
-          >
-            <Arrow dir="next" />
-          </button>
-        </div>
+        {total === 0 && !loading && <p role="status" className="px-6 py-12 text-center text-ivory-2">Featured menu items are currently unavailable.</p>}
 
-        <div className="container-x mt-3 flex items-center gap-5 sm:mt-4 lg:mt-3">
-          <p className="label shrink-0 text-ivory-2 tabular-nums" aria-live="polite">
-            <span className="sr-only">Showing </span>
-            {pad(activeIndex + 1)} <span className="text-ivory/45">/ {pad(total)}</span>
-          </p>
-          {/* Position track marks the centred product */}
-          <div aria-hidden="true" className="relative h-px flex-1 bg-ivory/15">
-            <span
-              className="absolute top-1/2 left-0 h-[3px] -translate-y-1/2 rounded-full bg-bronze-deep transition-[transform] duration-300 ease-out"
-              style={{
-                width: `${100 / total}%`,
-                transform: `translate(${activeIndex * 100}%, -50%)`,
-              }}
-            />
-          </div>
-        </div>
+        {total > 0 && (
+          <>
+            <div className={`mt-3 flex justify-center gap-3 sm:mt-4 lg:mt-2 ${canScroll ? '' : 'invisible'}`}>
+              <button
+                type="button"
+                onClick={() => step(-1)}
+                aria-label="Previous specials"
+                className="glass glass-control text-ivory"
+              >
+                <Arrow dir="prev" />
+              </button>
+              <button
+                type="button"
+                onClick={() => step(1)}
+                aria-label="Next specials"
+                className="glass glass-control text-ivory"
+              >
+                <Arrow dir="next" />
+              </button>
+            </div>
+
+            <div className="container-x mt-3 flex items-center gap-5 sm:mt-4 lg:mt-3">
+              <p className="label shrink-0 text-ivory-2 tabular-nums" aria-live="polite">
+                <span className="sr-only">Showing </span>
+                {pad(currentIndex + 1)} <span className="text-ivory/45">/ {pad(total)}</span>
+              </p>
+              {/* Position track marks the centred product */}
+              <div aria-hidden="true" className="relative h-px flex-1 bg-ivory/15">
+                <span
+                  className="absolute top-1/2 left-0 h-[3px] -translate-y-1/2 rounded-full bg-bronze-deep transition-[transform] duration-300 ease-out"
+                  style={{
+                    width: `${100 / total}%`,
+                    transform: `translate(${currentIndex * 100}%, -50%)`,
+                  }}
+                />
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </section>
   )

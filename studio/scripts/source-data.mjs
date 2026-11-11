@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -19,6 +19,7 @@ export async function loadSourceData() {
   try {
     await writeFile(path.join(temp, 'package.json'), '{"type":"module"}', 'utf8')
     await Promise.all([
+      copyFile(path.join(root, 'src/data/homepageSpecials.mjs'), path.join(temp, 'homepageSpecials.mjs')),
       compileDataModule(path.join(root, 'src/data/images.ts'), path.join(temp, 'images.js')),
       compileDataModule(path.join(root, 'src/data/menu.ts'), path.join(temp, 'menu.js')),
       compileDataModule(path.join(root, 'src/data/specials.ts'), path.join(temp, 'specials.js')),
@@ -28,7 +29,16 @@ export async function loadSourceData() {
       import(pathToFileURL(path.join(temp, 'specials.js')).href),
     ])
     const store = JSON.parse(await readFile(path.join(root, 'data/menu-store.json'), 'utf8'))
-    return { root, store, seedCategories: menu.categories, seedItems: menu.menuItems, specials: specials.specials, specialItems: specials.featuredItems }
+    return {
+      root,
+      store,
+      seedCategories: menu.categories,
+      seedItems: menu.menuItems,
+      specials: specials.specials,
+      specialItems: specials.featuredItems,
+      homepageSpecials: specials.homepageSpecials,
+      resolveHomepageSpecials: specials.resolveHomepageSpecials,
+    }
   } finally {
     await rm(temp, { recursive: true, force: true })
   }

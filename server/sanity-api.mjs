@@ -278,8 +278,8 @@ function validateCmsBackup(payload, categories, currentItems, canonicalItems) {
   return items.map((item) => !Object.hasOwn(item, 'image') && old.get(item.id)?.image ? { ...item, image: old.get(item.id).image } : item)
 }
 
-function createReadClient(env) {
-  return createClient({ projectId: env.SANITY_PROJECT_ID || 'kgt3bhzl', dataset: env.SANITY_DATASET || 'production', apiVersion: '2025-02-19', perspective: 'published', useCdn: true })
+export function createReadClient(env = process.env) {
+  return createClient({ projectId: env.SANITY_PROJECT_ID || 'kgt3bhzl', dataset: env.SANITY_DATASET || 'production', apiVersion: '2025-02-19', perspective: 'published', useCdn: false })
 }
 
 export function createWriteClient(env = process.env) {

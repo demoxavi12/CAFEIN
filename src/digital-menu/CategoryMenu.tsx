@@ -3,6 +3,7 @@ import { ChevronDown } from 'lucide-react'
 import type { MenuCategory } from '../data/menu'
 import type { EnhancedMenuItem } from './adminStore'
 import { InCafeMenuItemRow } from './InCafeMenuItemRow'
+import { getMenuSectionLabel } from './menuSectionLabel.mjs'
 
 interface Props {
   categories: MenuCategory[]
@@ -58,7 +59,7 @@ export function CategoryMenu({ categories, items, tray, onSelect, onAdd, onRemov
       }
       grouped.set(category.id, [...sections].map(([label, sectionItems]) => ({
         id: getSubcategoryId(category.id, label),
-        label,
+        label: getMenuSectionLabel(label),
         items: sectionItems,
       })))
     }
@@ -373,7 +374,10 @@ export function CategoryMenu({ categories, items, tray, onSelect, onAdd, onRemov
                         else subcategorySectionRefs.current.delete(subcategory.id)
                       }}
                     >
-                      <h3 id={`${subcategory.id}-heading`}>{subcategory.label}</h3>
+                      <header className="digital-menu-subcategory__heading">
+                        <h3 id={`${subcategory.id}-heading`}>{subcategory.label}</h3>
+                        <span aria-label={`${subcategory.items.length} menu items`}>{subcategory.items.length}</span>
+                      </header>
                       <div className="digital-menu-category__items">
                         {subcategory.items.map((item) => (
                           <InCafeMenuItemRow

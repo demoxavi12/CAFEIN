@@ -4,6 +4,7 @@ import type { ImageAsset } from '../data/images'
 import { CafeInLogo } from '../components/CafeInLogo'
 import { menuItems as canonicalMenuItems, type MenuCategory } from '../data/menu'
 import { getCategoryForMenuSection, getMenuSectionMappings, type MenuSectionMapping } from '../../shared/menu-taxonomy.mjs'
+import { getMenuSectionLabel } from './menuSectionLabel.mjs'
 import {
   AdminApiError,
   checkAdminSession,
@@ -322,8 +323,8 @@ function ItemEditor({ item, categories, sections, conflict, managerBusy, onSave,
             const category = getCategoryForMenuSection(section, sections)
             if (category) setDraft((current) => ({ ...current, section, category: category as EnhancedMenuItem['category'] }))
           }} className="rounded-lg border border-ivory/15 bg-espresso px-2.5 py-2 text-sm normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none">
-            {!sections.some((entry) => entry.section === draft.section) && <option value={draft.section}>{draft.section} · choose a configured section</option>}
-            {sections.map(({ section }) => <option key={section} value={section}>{section}</option>)}
+            {!sections.some((entry) => entry.section === draft.section) && <option value={draft.section}>{getMenuSectionLabel(draft.section)} · choose a configured section</option>}
+            {sections.map(({ section }) => <option key={section} value={section}>{getMenuSectionLabel(section)}</option>)}
           </select>
         </label>
       </div>
@@ -555,13 +556,13 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
   }
 
   const handleRestore = async (item: EnhancedMenuItem) => {
-    if (!window.confirm(`Restore ${item.name}?\n\nIt will return to ${item.section} under ${categories.find((category) => category.id === item.category)?.label || item.category}. This saves a draft and does not publish it.`)) return
+    if (!window.confirm(`Restore ${item.name}?\n\nIt will return to ${getMenuSectionLabel(item.section)} under ${categories.find((category) => category.id === item.category)?.label || item.category}. This saves a draft and does not publish it.`)) return
     setBusy(true)
     try {
       await setArchived(item.id, 'restore')
       setErrorMsg('')
       setRevisionConflict(false)
-      setSuccessMsg(`${item.name} restored to ${item.section} as an unpublished draft.`)
+      setSuccessMsg(`${item.name} restored to ${getMenuSectionLabel(item.section)} as an unpublished draft.`)
     } catch (cause) {
       if (cause instanceof AdminApiError && cause.status === 409) reportRevisionConflict()
       else reportError(cause)
@@ -838,7 +839,7 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
               <form onSubmit={handleCreate} className="grid max-h-[45dvh] grid-cols-1 gap-3 overflow-y-auto overscroll-contain border-t border-ivory/10 p-4 sm:grid-cols-2 lg:max-h-[42dvh] lg:grid-cols-[1.3fr_7rem_1fr_1.5fr_auto]">
                 <label className="grid gap-1.5 text-xs tracking-wide text-ivory/70">Item name<input value={newName} disabled={busy} onChange={(event) => setNewName(event.target.value)} maxLength={80} required placeholder="Item name" className="min-h-11 rounded-lg border border-ivory/15 bg-black/30 px-3 text-sm normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none focus-visible:ring-2 focus-visible:ring-bronze/60 disabled:opacity-60" /></label>
                 <label className="grid gap-1.5 text-xs tracking-wide text-ivory/70">Price &#8377;<input type="number" min="0" max="100000" step="1" value={newPrice} disabled={busy} onChange={(event) => setNewPrice(event.target.value)} required placeholder="0" className="min-h-11 rounded-lg border border-ivory/15 bg-black/30 px-3 text-sm normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none focus-visible:ring-2 focus-visible:ring-bronze/60 disabled:opacity-60" /></label>
-                <label className="grid gap-1.5 text-xs tracking-wide text-ivory/70">Gourmet section<select value={newSection} required disabled={busy || !sections.length} onChange={(event) => setNewSection(event.target.value)} className="min-h-11 rounded-lg border border-ivory/15 bg-espresso px-3 text-sm normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none focus-visible:ring-2 focus-visible:ring-bronze/60 disabled:opacity-50"><option value="" disabled>{sections.length ? 'Choose a section' : 'No sections configured'}</option>{sections.map(({ section }) => <option key={section} value={section}>{section}</option>)}</select><span className="text-[10px] text-ivory/45">Parent category: {categories.find((category) => category.id === getCategoryForMenuSection(newSection, sections))?.label || 'Choose a section'}</span></label>
+                <label className="grid gap-1.5 text-xs tracking-wide text-ivory/70">Gourmet section<select value={newSection} required disabled={busy || !sections.length} onChange={(event) => setNewSection(event.target.value)} className="min-h-11 rounded-lg border border-ivory/15 bg-espresso px-3 text-sm normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none focus-visible:ring-2 focus-visible:ring-bronze/60 disabled:opacity-50"><option value="" disabled>{sections.length ? 'Choose a section' : 'No sections configured'}</option>{sections.map(({ section }) => <option key={section} value={section}>{getMenuSectionLabel(section)}</option>)}</select><span className="text-[10px] text-ivory/45">Parent category: {categories.find((category) => category.id === getCategoryForMenuSection(newSection, sections))?.label || 'Choose a section'}</span></label>
                 <label className="grid gap-1.5 text-xs tracking-wide text-ivory/70">Description<input value={newDescription} disabled={busy} onChange={(event) => setNewDescription(event.target.value)} maxLength={500} placeholder="Optional" className="min-h-11 rounded-lg border border-ivory/15 bg-black/30 px-3 text-sm normal-case tracking-normal text-ivory focus:border-bronze focus:outline-none focus-visible:ring-2 focus-visible:ring-bronze/60 disabled:opacity-60" /></label>
                 <div className="flex flex-wrap items-center gap-3 sm:col-span-2 lg:col-span-5">
                   <button type="button" aria-pressed={newIsSoldOut} disabled={busy || !sections.length} onClick={() => setNewIsSoldOut((soldOut) => !soldOut)} className={`min-h-11 rounded-full border px-3 text-xs font-semibold disabled:opacity-50 ${newIsSoldOut ? 'border-red-500/50 bg-red-500/15 text-red-200' : 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200'}`}>{newIsSoldOut ? 'Sold out' : 'In stock'}</button>

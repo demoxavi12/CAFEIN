@@ -17,6 +17,7 @@ import {
   HeartHandshake,
 } from 'lucide-react'
 import type { EnhancedMenuItem } from './adminStore'
+import { getMenuSectionLabel } from './menuSectionLabel.mjs'
 
 interface Props {
   item: EnhancedMenuItem | null
@@ -162,7 +163,7 @@ export function DigitalMenuDetailSheet({
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
                   </span>
                   <span className="text-[11px] font-mono uppercase tracking-wider text-bronze">
-                    {item.section}
+                    {getMenuSectionLabel(item.section)}
                   </span>
                   {item.badge && (
                     <span className="rounded-full bg-bronze/20 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-bronze border border-bronze/30">

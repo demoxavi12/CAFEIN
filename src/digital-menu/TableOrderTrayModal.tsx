@@ -1,4 +1,5 @@
 import type { EnhancedMenuItem } from './adminStore'
+import { getMenuSectionLabel } from './menuSectionLabel.mjs'
 
 interface Props {
   isOpen: boolean
@@ -77,7 +78,7 @@ export function TableOrderTrayModal({
                   <div className="flex-1 pr-2">
                     <p className="font-semibold text-ivory text-sm">{item.name}</p>
                     <p className="text-[10px] text-ivory/50 font-mono">
-                      ₹{item.price} each • {item.section}
+                      ₹{item.price} each • {getMenuSectionLabel(item.section)}
                     </p>
                   </div>
 

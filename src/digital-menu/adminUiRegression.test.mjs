@@ -61,6 +61,16 @@ test('manager photo picker accepts the server-validated image formats', () => {
   assert.match(modal, /Choose a JPEG, PNG, or WebP image\./)
 })
 
+test('manager photo picker is a non-submitting control and clears picker focus state safely', () => {
+  const picker = modal.slice(modal.indexOf('const fileInputRef'), modal.indexOf('const setPreviewUrl'))
+  assert.match(modal, /<button[\s\S]*?type="button"[\s\S]*?isPickingFile\.current = true[\s\S]*?fileInputRef\.current\?\.click\(\)/)
+  assert.match(modal, /input\?\.addEventListener\('cancel', handlePickerCancel\)/)
+  assert.match(modal, /window\.addEventListener\('focus', handleWindowFocus\)/)
+  assert.match(modal, /isPickingFile\.current = false[\s\S]*?selectFile\(event\.currentTarget\.files\?\.\[0\]\)/)
+  assert.match(modal, /onClick=\{\(event\) => event\.stopPropagation\(\)\}/)
+  assert.match(picker, /const isPickingFile = useRef\(false\)/)
+})
+
 test('manager photo selection previews locally and uploads only after explicit confirmation', () => {
   const selectFile = modal.slice(modal.indexOf('const selectFile ='), modal.indexOf('const confirmUpload ='))
   const confirmUpload = modal.slice(modal.indexOf('const confirmUpload ='), modal.indexOf('const cancelSelection ='))
@@ -85,6 +95,11 @@ test('manager portal uses a body-level full-viewport portal and restores backgro
   assert.doesNotMatch(modal, /sm:h-auto|sm:max-h-\[94dvh\]|sm:max-w-6xl|xl:max-w-7xl/)
   assert.match(modal, /document\.body\.style\.overflow = 'hidden'/)
   assert.match(modal, /document\.body\.style\.overflow = bodyOverflow/)
+  assert.match(modal, /document\.body\.style\.pointerEvents = bodyPointerEvents/)
+  assert.match(modal, /document\.documentElement\.style\.pointerEvents = documentPointerEvents/)
   assert.match(modal, /appRoot\.inert = true/)
   assert.match(modal, /appRoot\.inert = appWasInert/)
+  assert.match(modal, /appRoot\.setAttribute\('aria-hidden', 'true'\)/)
+  assert.match(modal, /appRoot\.removeAttribute\('aria-hidden'\)/)
+  assert.match(modal, /document\.removeEventListener\('keydown', handleDialogKey\)/)
 })

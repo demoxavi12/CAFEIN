@@ -50,6 +50,8 @@ function PhotoUploadField({
 }) {
   const inputId = useId()
   const hintId = useId()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const isPickingFile = useRef(false)
   const [localPreview, setLocalPreview] = useState<string | null>(null)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [previewReady, setPreviewReady] = useState(false)
@@ -63,6 +65,21 @@ function PhotoUploadField({
   useEffect(() => () => {
     if (previewUrl.current) URL.revokeObjectURL(previewUrl.current)
     if (pendingUpload.current) void discardMenuPhoto(pendingUpload.current).catch(() => undefined)
+  }, [])
+  useEffect(() => {
+    const clearPickerState = () => { isPickingFile.current = false }
+    const handleWindowFocus = () => {
+      if (isPickingFile.current) clearPickerState()
+    }
+    const handlePickerCancel = () => clearPickerState()
+    const input = fileInputRef.current
+    window.addEventListener('focus', handleWindowFocus)
+    input?.addEventListener('cancel', handlePickerCancel)
+    return () => {
+      window.removeEventListener('focus', handleWindowFocus)
+      input?.removeEventListener('cancel', handlePickerCancel)
+      clearPickerState()
+    }
   }, [])
   useEffect(() => {
     mounted.current = true
@@ -206,10 +223,22 @@ function PhotoUploadField({
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-        <label htmlFor={inputId} aria-disabled={disabled || progress !== null} className={`inline-flex min-h-10 items-center rounded-lg border border-ivory/20 px-3 text-[10px] text-ivory/80 transition-colors focus-within:outline focus-within:outline-2 focus-within:outline-bronze ${disabled || progress !== null ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-bronze/50 hover:text-ivory'}`}>
+        <button
+          type="button"
+          aria-describedby={hintId}
+          disabled={disabled || progress !== null}
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            isPickingFile.current = true
+            fileInputRef.current?.click()
+          }}
+          className={`inline-flex min-h-10 items-center rounded-lg border border-ivory/20 px-3 text-[10px] text-ivory/80 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze disabled:cursor-not-allowed disabled:opacity-50 ${disabled || progress !== null ? '' : 'hover:border-bronze/50 hover:text-ivory'}`}
+        >
           {pendingFile ? 'Choose another photo' : value ? 'Change photo' : 'Add photo'}
-        </label>
+        </button>
         <input
+          ref={fileInputRef}
           id={inputId}
           type="file"
           name="menu-photo"
@@ -217,7 +246,12 @@ function PhotoUploadField({
           aria-describedby={hintId}
           className="sr-only"
           disabled={disabled || progress !== null}
-          onChange={(event) => { selectFile(event.currentTarget.files?.[0]); event.currentTarget.value = '' }}
+          onClick={(event) => event.stopPropagation()}
+          onChange={(event) => {
+            isPickingFile.current = false
+            selectFile(event.currentTarget.files?.[0])
+            event.currentTarget.value = ''
+          }}
         />
         <span id={hintId} className="sr-only">JPEG, PNG, or WebP image up to 4 megabytes.</span>
         {pendingFile ? (
@@ -359,15 +393,28 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
     if (!isOpen) return
     const bodyOverflow = document.body.style.overflow
     const documentOverflow = document.documentElement.style.overflow
+    const bodyPointerEvents = document.body.style.pointerEvents
+    const documentPointerEvents = document.documentElement.style.pointerEvents
     const appRoot = document.getElementById('root')
     const appWasInert = appRoot?.inert ?? false
+    const appHadAriaHidden = appRoot?.hasAttribute('aria-hidden') ?? false
+    const appAriaHidden = appRoot?.getAttribute('aria-hidden')
     document.body.style.overflow = 'hidden'
     document.documentElement.style.overflow = 'hidden'
-    if (appRoot) appRoot.inert = true
+    if (appRoot) {
+      appRoot.inert = true
+      appRoot.setAttribute('aria-hidden', 'true')
+    }
     return () => {
       document.body.style.overflow = bodyOverflow
       document.documentElement.style.overflow = documentOverflow
-      if (appRoot) appRoot.inert = appWasInert
+      document.body.style.pointerEvents = bodyPointerEvents
+      document.documentElement.style.pointerEvents = documentPointerEvents
+      if (appRoot) {
+        appRoot.inert = appWasInert
+        if (appHadAriaHidden) appRoot.setAttribute('aria-hidden', appAriaHidden ?? '')
+        else appRoot.removeAttribute('aria-hidden')
+      }
     }
   }, [isOpen])
 

@@ -1,6 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { createClient } from '@sanity/client'
-import defaultImageUrlBuilder from '@sanity/image-url'
+import { createImageUrlBuilder } from '@sanity/image-url'
 import { createHash } from 'node:crypto'
 import { hasManagerPasswordConfig, verifyManagerPassword } from './password-auth.mjs'
 import { MenuStoreError } from './menu-store.mjs'
@@ -39,7 +39,28 @@ function inspectSanityImage(buffer, contentType) {
       offset += 2 + segmentLength
     }
   }
-  throw new MenuStoreError('Use a complete JPEG or PNG image.', 415, 'unsupported_media_type')
+  if (contentType === 'image/webp') {
+    if (buffer.length < 30 || buffer.toString('ascii', 0, 4) !== 'RIFF' || buffer.toString('ascii', 8, 12) !== 'WEBP' || buffer.readUInt32LE(4) + 8 !== buffer.length) throw new MenuStoreError('The file is not a complete WebP image.', 415, 'invalid_image')
+    const chunkType = buffer.toString('ascii', 12, 16)
+    const chunkLength = buffer.readUInt32LE(16)
+    if (chunkLength < 5 || 20 + chunkLength > buffer.length) throw new MenuStoreError('The file is not a complete WebP image.', 415, 'invalid_image')
+    let width = 0
+    let height = 0
+    if (chunkType === 'VP8X' && chunkLength >= 10) {
+      width = 1 + buffer.readUIntLE(24, 3)
+      height = 1 + buffer.readUIntLE(27, 3)
+    } else if (chunkType === 'VP8L' && chunkLength >= 5 && buffer[20] === 0x2f) {
+      width = 1 + buffer[21] + ((buffer[22] & 0x3f) << 8)
+      height = 1 + ((buffer[22] >> 6) | (buffer[23] << 2) | ((buffer[24] & 0x0f) << 10))
+    } else if (chunkType === 'VP8 ' && chunkLength >= 10 && buffer[23] === 0x9d && buffer[24] === 0x01 && buffer[25] === 0x2a) {
+      width = buffer.readUInt16LE(26) & 0x3fff
+      height = buffer.readUInt16LE(28) & 0x3fff
+    }
+    if (!width || !height) throw new MenuStoreError('Use a complete JPEG, PNG, or WebP image.', 415, 'unsupported_media_type')
+    if (width > 10000 || height > 10000 || width * height > 40_000_000) throw new MenuStoreError('Image dimensions are invalid or too large.', 413, 'image_dimensions_too_large')
+    return { width, height, extension: 'webp' }
+  }
+  throw new MenuStoreError('Use a complete JPEG, PNG, or WebP image.', 415, 'unsupported_media_type')
 }
 
 function constantEqual(a, b) {
@@ -266,7 +287,7 @@ export function createWriteClient(env = process.env) {
   return createClient({ projectId: env.SANITY_PROJECT_ID || 'kgt3bhzl', dataset: env.SANITY_DATASET || 'production', apiVersion: '2025-02-19', token: env.SANITY_API_TOKEN, perspective: 'drafts', useCdn: false })
 }
 
-export function createSanityApiHandler({ env = process.env, client = createReadClient(env), writeClient = createSanityWriteClient(env), imageUrlBuilder = defaultImageUrlBuilder, seed, clock = () => Date.now(), imageInspector = inspectSanityImage }) {
+export function createSanityApiHandler({ env = process.env, client = createReadClient(env), writeClient = createSanityWriteClient(env), imageUrlBuilder = createImageUrlBuilder, seed, clock = () => Date.now(), imageInspector = inspectSanityImage }) {
   const builderFactory = imageUrlBuilder
   const builder = builderFactory(client)
   const attempts = new Map()

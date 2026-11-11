@@ -68,7 +68,7 @@ async function adminRequest<T>(url: string, init: RequestInit = {}) {
 
 export async function uploadMenuPhoto(file: File, onProgress: (progress: number) => void): Promise<ImageAsset> {
   const token = await getCsrfToken()
-  const contentType = file.type || (/\.png$/i.test(file.name) ? 'image/png' : /\.jpe?g$/i.test(file.name) ? 'image/jpeg' : '')
+  const contentType = file.type || (/\.png$/i.test(file.name) ? 'image/png' : /\.webp$/i.test(file.name) ? 'image/webp' : /\.jpe?g$/i.test(file.name) ? 'image/jpeg' : '')
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest()
     request.open('POST', '/api/admin/images')

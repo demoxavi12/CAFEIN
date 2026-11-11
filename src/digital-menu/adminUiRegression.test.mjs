@@ -39,3 +39,24 @@ test('modal focus trap does not refocus search when the parent close callback ch
   assert.match(modal, /\}, \[isOpen\]\)/)
   assert.doesNotMatch(modal, /\}, \[isOpen, onClose\]\)/)
 })
+
+test('new menu drafts prevent duplicate IDs and duplicate submissions', () => {
+  assert.match(modal, /if \(busy \|\| newPhotoBusy\) return/)
+  assert.match(modal, /items\.some\(\(item\) => item\.id === id\)/)
+  assert.match(modal, /setBusy\(true\)[\s\S]*finally \{\s*setBusy\(false\)/)
+  assert.match(modal, /disabled=\{busy \|\| newPhotoBusy \|\| !sections\.length\}/)
+})
+
+test('manager add and edit forms expose the supported availability and badge fields', () => {
+  assert.match(modal, /newIsSoldOut/)
+  assert.match(modal, /newBadge/)
+  assert.match(modal, /option value="Bestseller"/)
+  assert.match(modal, /option value="Chef Special"/)
+  assert.match(modal, /update\('isSoldOut'/)
+  assert.match(modal, /update\('badge'/)
+})
+
+test('manager photo picker accepts the server-validated image formats', () => {
+  assert.match(modal, /accept="image\/jpeg,image\/png,image\/webp"/)
+  assert.match(modal, /Choose a JPEG, PNG, or WebP image\./)
+})

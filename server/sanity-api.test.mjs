@@ -17,6 +17,18 @@ const publishedSeed = { categories: seed.categories, items: [{ id: rawItem.id, n
 const env = { NODE_ENV: 'development', PUBLIC_ORIGIN: 'https://cafe-in.test', MANAGER_PASSWORD_HASH: '', ADMIN_SESSION_SECRET: 's'.repeat(48), SANITY_API_TOKEN: 'server-only' }
 const imageUrlBuilder = () => ({ image: (image) => ({ auto: () => ({ fit: () => ({ url: () => 'https://cdn.sanity.io/images/kgt3bhzl/production/' + image.asset._ref }) }) }) })
 
+function webpFixture(width = 320, height = 240) {
+  const bytes = Buffer.alloc(30)
+  bytes.write('RIFF', 0, 'ascii')
+  bytes.writeUInt32LE(bytes.length - 8, 4)
+  bytes.write('WEBP', 8, 'ascii')
+  bytes.write('VP8X', 12, 'ascii')
+  bytes.writeUInt32LE(10, 16)
+  bytes.writeUIntLE(width - 1, 24, 3)
+  bytes.writeUIntLE(height - 1, 27, 3)
+  return bytes
+}
+
 test('Vercel routes menu deep links to the SPA and bundles the API seed', () => {
   const config = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'))
   assert.equal(config.functions['api/**/*.mjs'].includeFiles, 'dist/menu-seed.json')
@@ -541,6 +553,40 @@ test('authenticated image uploads validate bytes and store assets through Sanity
   assert.equal(upload.status, 201)
   assert.equal(stored, 1)
   assert.equal(upload.body.image.assetId, rawItem.image.asset._ref)
+})
+
+test('authenticated WebP uploads validate dimensions and reject malformed bytes before storage', async () => {
+  const secureEnv = { ...env, MANAGER_PASSWORD_HASH: await makeManagerPasswordHash('test password') }
+  const bytes = webpFixture()
+  let stored = 0
+  let uploadOptions
+  const writeClient = fakeClient()
+  writeClient.assets.upload = async (type, value, options) => {
+    assert.equal(type, 'image')
+    assert.deepEqual(value, bytes)
+    stored += 1
+    uploadOptions = options
+    return { _id: 'image-webp123-320x240-webp', url: 'https://cdn.sanity.io/uploaded.webp' }
+  }
+  const handler = createSanityApiHandler({ env: secureEnv, client: fakeClient(), writeClient, seed, imageUrlBuilder })
+  const login = await call(handler, '/api/admin/login', { method: 'POST', headers: { origin: secureEnv.PUBLIC_ORIGIN }, body: { password: 'test password' } })
+  const cookie = login.headers['Set-Cookie'].split(';')[0]
+  const session = await call(handler, '/api/admin/session', { headers: { cookie } })
+  const headers = { cookie, origin: secureEnv.PUBLIC_ORIGIN, 'x-csrf-token': session.body.csrfToken, 'content-type': 'image/webp' }
+  const upload = await call(handler, '/api/admin/images', { method: 'POST', headers, body: bytes })
+  assert.equal(upload.status, 201)
+  assert.equal(upload.body.image.width, 320)
+  assert.equal(upload.body.image.height, 240)
+  assert.equal(uploadOptions.filename, 'cafein-menu.webp')
+  assert.equal(uploadOptions.contentType, 'image/webp')
+  assert.equal(stored, 1)
+
+  const malformed = Buffer.from(bytes)
+  malformed.write('NOPE', 0, 'ascii')
+  const rejected = await call(handler, '/api/admin/images', { method: 'POST', headers, body: malformed })
+  assert.equal(rejected.status, 415)
+  assert.equal(rejected.body.code, 'invalid_image')
+  assert.equal(stored, 1)
 })
 
 test('image upload reuses a matching Sanity asset instead of creating a duplicate', async () => {

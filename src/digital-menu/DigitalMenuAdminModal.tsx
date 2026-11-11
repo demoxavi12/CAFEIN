@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { ImageAsset } from '../data/images'
+import { CafeInLogo } from '../components/CafeInLogo'
 import { menuItems as canonicalMenuItems, type MenuCategory } from '../data/menu'
 import { getCategoryForMenuSection, getMenuSectionMappings, type MenuSectionMapping } from '../../shared/menu-taxonomy.mjs'
 import {
@@ -37,25 +39,29 @@ function PhotoUploadField({
   value,
   original,
   onChange,
-  onUploadingChange,
+  onPendingChange,
   disabled = false,
 }: {
   value?: ImageAsset
   original?: ImageAsset
   onChange: (image: ImageAsset | undefined) => void
-  onUploadingChange?: (uploading: boolean) => void
+  onPendingChange?: (pending: boolean) => void
   disabled?: boolean
 }) {
+  const inputId = useId()
+  const hintId = useId()
   const [localPreview, setLocalPreview] = useState<string | null>(null)
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const [previewReady, setPreviewReady] = useState(false)
+  const [previewFailed, setPreviewFailed] = useState(false)
   const [progress, setProgress] = useState<number | null>(null)
   const [uploadError, setUploadError] = useState('')
+  const previewUrl = useRef<string | null>(null)
   const pendingUpload = useRef<string | null>(null)
   const mounted = useRef(false)
 
   useEffect(() => () => {
-    if (localPreview) URL.revokeObjectURL(localPreview)
-  }, [localPreview])
-  useEffect(() => () => {
+    if (previewUrl.current) URL.revokeObjectURL(previewUrl.current)
     if (pendingUpload.current) void discardMenuPhoto(pendingUpload.current).catch(() => undefined)
   }, [])
   useEffect(() => {
@@ -63,7 +69,13 @@ function PhotoUploadField({
     return () => { mounted.current = false }
   }, [])
 
-  const selectFile = async (file?: File) => {
+  const setPreviewUrl = (url: string | null) => {
+    if (previewUrl.current && previewUrl.current !== url) URL.revokeObjectURL(previewUrl.current)
+    previewUrl.current = url
+    setLocalPreview(url)
+  }
+
+  const selectFile = (file?: File) => {
     if (!file) return
     const contentType = file.type || (/\.png$/i.test(file.name) ? 'image/png' : /\.webp$/i.test(file.name) ? 'image/webp' : /\.jpe?g$/i.test(file.name) ? 'image/jpeg' : '')
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(contentType)) {
@@ -74,11 +86,26 @@ function PhotoUploadField({
       setUploadError('Choose an image smaller than 4 MB for secure serverless upload.')
       return
     }
-    if (localPreview) URL.revokeObjectURL(localPreview)
-    setLocalPreview(URL.createObjectURL(file))
+    let nextPreview: string
+    try {
+      nextPreview = URL.createObjectURL(file)
+    } catch {
+      setUploadError('The selected photo could not be previewed. Choose another image or check your browser settings.')
+      return
+    }
+    setPreviewUrl(nextPreview)
+    setPendingFile(file)
+    setPreviewReady(false)
+    setPreviewFailed(false)
     setUploadError('')
+    onPendingChange?.(true)
+  }
+
+  const confirmUpload = async () => {
+    if (!pendingFile || !previewReady || previewFailed || progress !== null || disabled) return
+    const file = pendingFile
     setProgress(0)
-    onUploadingChange?.(true)
+    setUploadError('')
     const previousUpload = pendingUpload.current
     pendingUpload.current = null
     if (previousUpload) void discardMenuPhoto(previousUpload).catch(() => undefined)
@@ -88,9 +115,17 @@ function PhotoUploadField({
         void discardMenuPhoto(image.src).catch(() => undefined)
         return
       }
+      const imageUrl = new URL(image.src)
+      if (imageUrl.protocol !== 'https:' || imageUrl.hostname !== 'cdn.sanity.io' || !image.assetId?.startsWith('image-')) {
+        throw new Error('The upload service returned an invalid photo reference. Your current photo has been kept.')
+      }
       pendingUpload.current = image.src
       onChange(image)
-      setLocalPreview(null)
+      setPreviewUrl(null)
+      setPendingFile(null)
+      setPreviewReady(false)
+      setPreviewFailed(false)
+      onPendingChange?.(false)
       setUploadError('')
     } catch (cause) {
       if (!mounted.current) return
@@ -98,22 +133,33 @@ function PhotoUploadField({
     } finally {
       if (mounted.current) {
         setProgress(null)
-        onUploadingChange?.(false)
       }
     }
   }
 
+  const cancelSelection = () => {
+    if (progress !== null) return
+    setPreviewUrl(null)
+    setPendingFile(null)
+    setPreviewReady(false)
+    setPreviewFailed(false)
+    setUploadError('')
+    onPendingChange?.(false)
+  }
+
   const remove = () => {
+    if (pendingFile) {
+      cancelSelection()
+      return
+    }
     const uploaded = pendingUpload.current
     pendingUpload.current = null
     if (uploaded) void discardMenuPhoto(uploaded).catch(() => undefined)
-    if (localPreview) URL.revokeObjectURL(localPreview)
-    setLocalPreview(null)
     onChange(undefined)
   }
 
   const previewSrc = localPreview || value?.src || original?.src
-  const showingDifferentPhoto = Boolean(original?.src && (localPreview || (value?.src && original.src !== value.src)))
+  const showingDifferentPhoto = Boolean(localPreview || (original?.src && value?.src && original.src !== value.src))
 
   return (
     <div className="grid gap-2 rounded-xl border border-ivory/10 bg-black/15 p-2.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
@@ -126,7 +172,21 @@ function PhotoUploadField({
         )}
         {previewSrc ? (
           <div className="shrink-0">
-            <img src={previewSrc} alt={value?.alt || 'Menu item photo preview'} width={80} height={64} className="h-16 w-20 rounded-lg border border-ivory/10 object-cover" />
+            <img
+              src={previewSrc}
+              alt={localPreview ? 'Selected menu photo preview' : value?.alt || 'Menu item photo'}
+              width={128}
+              height={96}
+              decoding="async"
+              onLoad={() => { if (localPreview) setPreviewReady(true) }}
+              onError={() => {
+                if (!localPreview) return
+                setPreviewFailed(true)
+                setPreviewReady(false)
+                setUploadError('This image could not be previewed. Choose another photo; the current photo is unchanged.')
+              }}
+              className="aspect-[4/3] h-auto w-24 rounded-lg border border-ivory/10 bg-black/20 object-contain sm:w-32"
+            />
             {(showingDifferentPhoto || original) && <span className="mt-1 block text-center text-[9px] text-ivory/45">{showingDifferentPhoto ? 'Replacement' : 'Current'}</span>}
           </div>
         ) : (
@@ -135,6 +195,7 @@ function PhotoUploadField({
         <div className="min-w-0">
           <p className="text-[10px] font-medium text-ivory">{showingDifferentPhoto ? 'New photo preview' : value ? 'Current photo' : original ? 'Photo will be removed on save' : 'Optional item photo'}</p>
           {showingDifferentPhoto && <p className="mt-0.5 text-[10px] text-ivory/50">Current photo remains live until you save.</p>}
+          {pendingFile && progress === null && !uploadError && <p className="mt-1 text-[10px] text-ivory/55">Preview ready. Upload it to use it in this draft.</p>}
           {progress !== null && (
             <div className="mt-2 flex items-center gap-2">
               <div role="progressbar" aria-label="Photo upload progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} className="h-1 w-28 overflow-hidden rounded-full bg-ivory/15"><div className="h-full bg-bronze transition-[width] duration-150 motion-reduce:transition-none" style={{ width: `${progress}%` }} /></div>
@@ -145,11 +206,28 @@ function PhotoUploadField({
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-        <label aria-disabled={disabled || progress !== null} className={`inline-flex min-h-10 items-center rounded-lg border border-ivory/20 px-3 text-[10px] text-ivory/80 transition-colors focus-within:outline focus-within:outline-2 focus-within:outline-bronze ${disabled || progress !== null ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-bronze/50 hover:text-ivory'}`}>
-          {value ? 'Change photo' : 'Add photo'}
-          <input type="file" name="menu-photo" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={disabled || progress !== null} onChange={(event) => { void selectFile(event.currentTarget.files?.[0]); event.currentTarget.value = '' }} />
+        <label htmlFor={inputId} aria-disabled={disabled || progress !== null} className={`inline-flex min-h-10 items-center rounded-lg border border-ivory/20 px-3 text-[10px] text-ivory/80 transition-colors focus-within:outline focus-within:outline-2 focus-within:outline-bronze ${disabled || progress !== null ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-bronze/50 hover:text-ivory'}`}>
+          {pendingFile ? 'Choose another photo' : value ? 'Change photo' : 'Add photo'}
         </label>
-        {original && !value ? <button type="button" disabled={disabled} onClick={() => onChange(original)} className="min-h-10 rounded-lg px-2 text-[10px] text-ivory/55 hover:text-ivory focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze disabled:opacity-50">Keep current</button> : value ? <button type="button" onClick={remove} disabled={disabled || progress !== null} className="min-h-10 rounded-lg px-2 text-[10px] text-ivory/55 hover:text-ivory focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze disabled:opacity-50">Remove</button> : null}
+        <input
+          id={inputId}
+          type="file"
+          name="menu-photo"
+          accept="image/jpeg,image/png,image/webp"
+          aria-describedby={hintId}
+          className="sr-only"
+          disabled={disabled || progress !== null}
+          onChange={(event) => { selectFile(event.currentTarget.files?.[0]); event.currentTarget.value = '' }}
+        />
+        <span id={hintId} className="sr-only">JPEG, PNG, or WebP image up to 4 megabytes.</span>
+        {pendingFile ? (
+          <>
+            <button type="button" onClick={() => void confirmUpload()} disabled={disabled || progress !== null || !previewReady || previewFailed} className="min-h-10 rounded-lg bg-bronze px-3 text-[10px] font-semibold text-espresso focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze disabled:cursor-not-allowed disabled:opacity-50">
+              {progress !== null ? 'Uploading…' : 'Upload & use photo'}
+            </button>
+            <button type="button" onClick={cancelSelection} disabled={progress !== null} className="min-h-10 rounded-lg px-2 text-[10px] text-ivory/55 hover:text-ivory focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze disabled:opacity-50">Cancel</button>
+          </>
+        ) : original && !value ? <button type="button" disabled={disabled} onClick={() => onChange(original)} className="min-h-10 rounded-lg px-2 text-[10px] text-ivory/55 hover:text-ivory focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze disabled:opacity-50">Keep current</button> : value ? <button type="button" onClick={remove} disabled={disabled || progress !== null} className="min-h-10 rounded-lg px-2 text-[10px] text-ivory/55 hover:text-ivory focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze disabled:opacity-50">Remove</button> : null}
       </div>
     </div>
   )
@@ -182,7 +260,7 @@ function ItemEditor({ item, categories, sections, conflict, managerBusy, onSave,
   }
 
   return (
-    <article className="rounded-2xl border border-ivory/10 bg-ivory/[0.045] p-4 text-xs sm:p-5">
+    <article className="min-w-0 rounded-2xl border border-ivory/10 bg-ivory/[0.045] p-4 text-xs sm:p-5">
       <div className="mb-4 flex min-w-0 items-center gap-3 border-b border-ivory/10 pb-3">
         <div className="flex h-16 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-ivory/10 bg-black/25">
           {item.image?.src ? <img src={item.image.src} alt="" width={80} height={64} loading="lazy" decoding="async" className="h-full w-full object-cover" /> : <span className="text-[9px] uppercase tracking-wide text-ivory/40">No photo</span>}
@@ -221,7 +299,7 @@ function ItemEditor({ item, categories, sections, conflict, managerBusy, onSave,
         <textarea value={draft.description || ''} maxLength={500} rows={2} disabled={managerBusy || busy || photoBusy} onChange={(event) => update('description', event.target.value)} className="w-full resize-y rounded-lg border border-ivory/15 bg-black/30 p-2.5 text-xs normal-case tracking-normal leading-relaxed text-ivory focus:border-bronze focus:outline-none disabled:opacity-60" />
       </label>
       <div className="mt-3">
-        <PhotoUploadField value={draft.image} original={item.image} disabled={managerBusy || busy} onChange={(image) => update('image', image ? { ...image, alt: draft.name } : undefined)} onUploadingChange={setPhotoBusy} />
+        <PhotoUploadField value={draft.image} original={item.image} disabled={managerBusy || busy} onChange={(image) => update('image', image ? { ...image, alt: draft.name } : undefined)} onPendingChange={setPhotoBusy} />
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-ivory/10 pt-3">
         <button type="button" disabled={managerBusy || busy || photoBusy} onClick={() => update('isSoldOut', !draft.isSoldOut)} className={`min-h-11 rounded-full border px-3 text-xs font-bold disabled:opacity-50 ${draft.isSoldOut ? 'border-red-500/50 bg-red-500/15 text-red-200' : 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200'}`}>
@@ -276,6 +354,22 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
   const sections = useMemo(() => getMenuSectionMappings(canonicalMenuItems, categories), [categories])
 
   useEffect(() => { onCloseRef.current = onClose }, [onClose])
+
+  useEffect(() => {
+    if (!isOpen) return
+    const bodyOverflow = document.body.style.overflow
+    const documentOverflow = document.documentElement.style.overflow
+    const appRoot = document.getElementById('root')
+    const appWasInert = appRoot?.inert ?? false
+    document.body.style.overflow = 'hidden'
+    document.documentElement.style.overflow = 'hidden'
+    if (appRoot) appRoot.inert = true
+    return () => {
+      document.body.style.overflow = bodyOverflow
+      document.documentElement.style.overflow = documentOverflow
+      if (appRoot) appRoot.inert = appWasInert
+    }
+  }, [isOpen])
 
   useEffect(() => {
     if (!isOpen) return
@@ -647,13 +741,19 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
     } catch (cause) { reportError(cause) } finally { setBusy(false) }
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-0 sm:p-4 lg:p-6" role="presentation">
-      <div data-ui="manager-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="manager-title" className="relative flex h-[100dvh] max-h-[100dvh] w-full max-w-none flex-col overflow-hidden border-bronze/35 bg-espresso-2 p-4 text-ivory shadow-2xl sm:h-auto sm:max-h-[94dvh] sm:max-w-6xl sm:rounded-3xl sm:border sm:p-6 xl:max-w-7xl">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] h-[100dvh] min-h-[100svh] overflow-hidden bg-espresso" role="presentation">
+      <div className="digital-menu-theme h-full min-h-0 w-full min-w-0">
+      <div data-ui="manager-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="manager-title" className="flex h-full min-h-0 w-full min-w-0 max-w-none flex-col overflow-hidden bg-espresso-2 p-3 text-ivory sm:p-5">
         <div className="flex items-start justify-between gap-3 border-b border-ivory/10 pb-4">
-          <div>
-            <h3 id="manager-title" className="font-display text-xl text-ivory sm:text-2xl">Cafe In Manager Portal</h3>
-            <p className="mt-1 text-[11px] text-bronze/80">Menu drafts · review before publishing</p>
+          <div className="flex items-center gap-3">
+            <span className="block h-11 w-11 shrink-0 overflow-hidden rounded-full bg-[#f4e8d7] ring-1 ring-bronze/40">
+              <CafeInLogo />
+            </span>
+            <div>
+              <h3 id="manager-title" className="font-display text-xl text-ivory sm:text-2xl">Cafe In Manager Portal</h3>
+              <p className="mt-1 text-[11px] text-bronze/80">Menu drafts · review before publishing</p>
+            </div>
           </div>
           <button type="button" onClick={onClose} aria-label="Close manager portal" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-ivory/10 text-2xl leading-none text-ivory/70 transition-colors hover:bg-ivory/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronze">&times;</button>
         </div>
@@ -670,7 +770,7 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
             </div>
           </form>
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col pt-3">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col pt-3">
             <div className="flex flex-col gap-3 border-b border-ivory/10 pb-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="text-xs font-medium text-ivory">Draft menu workspace</p>
@@ -696,9 +796,9 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
                 <div className="flex flex-wrap items-center gap-3 sm:col-span-2 lg:col-span-5">
                   <button type="button" aria-pressed={newIsSoldOut} disabled={busy || !sections.length} onClick={() => setNewIsSoldOut((soldOut) => !soldOut)} className={`min-h-11 rounded-full border px-3 text-xs font-semibold disabled:opacity-50 ${newIsSoldOut ? 'border-red-500/50 bg-red-500/15 text-red-200' : 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200'}`}>{newIsSoldOut ? 'Sold out' : 'In stock'}</button>
                   <label className="flex min-h-11 items-center gap-2 text-xs tracking-wide text-ivory/70">Badge<select value={newBadge} disabled={busy || !sections.length} onChange={(event) => setNewBadge(event.target.value)} className="min-h-11 rounded-lg border border-ivory/15 bg-espresso px-2 py-2 text-xs text-ivory focus:border-bronze focus:outline-none focus-visible:ring-2 focus-visible:ring-bronze/60 disabled:opacity-50"><option value="">None</option><option value="Bestseller">Bestseller</option><option value="Chef Special">Chef Special</option></select></label>
-                  <button type="submit" disabled={busy || newPhotoBusy || !sections.length} className="btn btn-primary ml-auto min-h-11 self-end px-4 text-xs disabled:opacity-50">{newPhotoBusy ? 'Uploading photo...' : busy ? 'Saving draft...' : 'Add draft'}</button>
+                  <button type="submit" disabled={busy || newPhotoBusy || !sections.length} className="btn btn-primary ml-auto min-h-11 self-end px-4 text-xs disabled:opacity-50">{newPhotoBusy ? 'Finish photo selection' : busy ? 'Saving draft...' : 'Add draft'}</button>
                 </div>
-                <div className="sm:col-span-2 lg:col-span-5"><PhotoUploadField value={newImage} disabled={busy} onChange={setNewImage} onUploadingChange={setNewPhotoBusy} /></div>
+                <div className="sm:col-span-2 lg:col-span-5"><PhotoUploadField value={newImage} disabled={busy} onChange={setNewImage} onPendingChange={setNewPhotoBusy} /></div>
               </form>
             </details>
 
@@ -723,7 +823,7 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
               <p className="hidden sm:block">Select an item to edit its draft</p>
             </div>
 
-            <div className="grid min-h-0 flex-1 grid-cols-1 content-start gap-3 overflow-y-auto overscroll-contain pr-1 sm:pr-2 lg:grid-cols-2">
+            <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 content-start gap-3 overflow-x-hidden overflow-y-auto overscroll-contain pr-1 sm:pr-2 lg:grid-cols-2">
               {loading ? <p className="py-10 text-center text-sm text-ivory/55">Loading menu drafts...</p> : filteredItems.length ? filteredItems.map((item) => <ItemEditor key={`${item.id}:${editorResetVersion}`} item={item} categories={categories} sections={sections} conflict={revisionConflict} managerBusy={busy} onSave={handleSave} onArchive={handleArchive} onRestore={handleRestore} />) : <div className="rounded-2xl border border-dashed border-ivory/15 px-5 py-12 text-center"><p className="font-display text-lg text-ivory">{showArchived ? 'No archived items' : 'No items found'}</p><p className="mt-2 text-xs text-ivory/55">{showArchived ? 'Items you archive will remain here and can be restored at any time.' : 'Try another search or category filter.'}</p></div>}
             </div>
 
@@ -794,6 +894,8 @@ export function DigitalMenuAdminModal({ isOpen, onClose }: Props) {
         {(errorMsg || error) && <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-red-500/10 px-3 py-2"><p role="alert" className="min-w-0 flex-1 text-xs text-red-200">{errorMsg || error}</p>{revisionConflict && <button type="button" disabled={busy} onClick={() => void handleReloadLatest()} className="min-h-10 shrink-0 rounded-lg border border-amber-200/30 px-3 text-[10px] font-semibold text-amber-100 hover:bg-amber-100/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-100 disabled:opacity-50">Reload and discard edits</button>}</div>}
         {successMsg && <p role="status" className="mt-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">{successMsg}</p>}
       </div>
-    </div>
+      </div>
+    </div>,
+    document.body,
   )
 }

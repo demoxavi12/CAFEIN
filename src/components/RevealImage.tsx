@@ -13,6 +13,7 @@ interface Props {
   from?: 'bottom' | 'left' | 'right'
   delay?: number
   eager?: boolean
+  onError?: () => void
 }
 
 /**
@@ -21,7 +22,7 @@ interface Props {
  * element does not reliably report intersection. Rendered as spans so it is
  * valid inside buttons.
  */
-export function RevealImage({ image, className = '', imgClassName = '', delay = 0, eager }: Props) {
+export function RevealImage({ image, className = '', imgClassName = '', delay = 0, eager, onError }: Props) {
   const ref = useRef<HTMLSpanElement>(null)
   const inView = useInView(ref, { once: true, margin: '0px 0px -12% 0px' })
   const reduceMotion = useReducedMotion()
@@ -41,6 +42,7 @@ export function RevealImage({ image, className = '', imgClassName = '', delay = 
             height={image.height}
             loading={eager ? 'eager' : 'lazy'}
             decoding="async"
+            onError={onError}
             className="frame-img"
             style={{ objectPosition: image.focus ?? 'center' }}
             initial={reduceMotion ? false : { scale: 1.04 }}

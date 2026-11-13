@@ -6,29 +6,77 @@ import {
 } from "motion/react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { gallery, type GalleryItem } from "../data/gallery";
+import { gallery, type GalleryItem, type GalleryLayout } from "../data/gallery";
 import { Lightbox } from "../components/Lightbox";
 import { RevealImage } from "../components/RevealImage";
 import { SectionHeading } from "../components/SectionHeading";
 
-const ratio = {
-  tall: "aspect-[3/4]",
-  wide: "aspect-[4/3]",
-  square: "aspect-square",
+const layoutAspect: Record<GalleryLayout, string> = {
+  "large-portrait": "3 / 4",
+  "small-portrait": "4 / 5",
+  "large-landscape": "4 / 3",
+  "small-landscape": "3 / 2",
+  square: "1 / 1",
+  "tall-vertical": "2 / 3",
+  "wide-horizontal": "16 / 9",
 };
-const desktopColumnWidths = [
-  "w-[clamp(160px,14vw,208px)]",
-  "w-[clamp(176px,16vw,232px)]",
-];
-const desktopColumns = gallery.reduce<Array<Array<{ item: GalleryItem; index: number }>>>(
-  (columns, item, index) => {
-    const columnIndex = Math.floor(index / 2);
-    if (!columns[columnIndex]) columns[columnIndex] = [];
-    columns[columnIndex].push({ item, index });
-    return columns;
-  },
-  [],
-);
+const desktopWidths: Record<GalleryLayout, string> = {
+  "large-portrait": "w-[clamp(190px,16vw,250px)]",
+  "small-portrait": "w-[clamp(150px,12vw,190px)]",
+  "large-landscape": "w-[clamp(245px,21vw,330px)]",
+  "small-landscape": "w-[clamp(190px,15vw,245px)]",
+  square: "w-[clamp(170px,14vw,220px)]",
+  "tall-vertical": "w-[clamp(160px,13vw,210px)]",
+  "wide-horizontal": "w-[clamp(265px,23vw,360px)]",
+};
+
+function arrangeDesktopColumns(items: GalleryItem[]) {
+  type PlacedItem = { item: GalleryItem; index: number; row: number };
+  const columns = new Map<number, PlacedItem[]>();
+  const unplaced: PlacedItem[] = [];
+
+  items.forEach((item, index) => {
+    const placed = item.placement;
+    if (placed && Number.isInteger(placed.column) && placed.column > 0 && Number.isInteger(placed.row) && placed.row > 0) {
+      const column = columns.get(placed.column) ?? [];
+      if (!column.some((entry) => entry.row === placed.row)) {
+        column.push({ item, index, row: placed.row });
+        columns.set(placed.column, column);
+        return;
+      }
+    }
+    unplaced.push({ item, index, row: 0 });
+  });
+
+  let columnNumber = 1;
+  let rowNumber = 1;
+  for (const entry of unplaced) {
+    while (columns.get(columnNumber)?.some((placed) => placed.row === rowNumber)) {
+      rowNumber += 1;
+      if (rowNumber > 2) {
+        columnNumber += 1;
+        rowNumber = 1;
+      }
+    }
+    const column = columns.get(columnNumber) ?? [];
+    column.push({ ...entry, row: rowNumber });
+    columns.set(columnNumber, column);
+    rowNumber += 1;
+    if (rowNumber > 2) {
+      columnNumber += 1;
+      rowNumber = 1;
+    }
+  }
+
+  return [...columns.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([columnNumberForKey, entries]) => ({
+      id: `gallery-column-${columnNumberForKey}`,
+      items: entries.sort((left, right) => left.row - right.row),
+    }));
+}
+
+const desktopColumns = arrangeDesktopColumns(gallery);
 
 function GalleryPhoto({
   item,
@@ -43,9 +91,11 @@ function GalleryPhoto({
   reduceMotion: boolean;
   desktop?: boolean;
 }) {
+  const [imageFailed, setImageFailed] = useState(false);
+
   return (
     <li
-      className={`${desktop ? "w-full min-w-0" : "mb-4 inline-block w-full break-inside-avoid"} min-w-0`}
+      className={`${desktop ? desktopWidths[item.layout] : "mb-4 inline-block w-full break-inside-avoid"} min-w-0`}
     >
       <button
         type="button"
@@ -53,17 +103,27 @@ function GalleryPhoto({
         className="group block w-full text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-bronze"
         aria-label={`Open image: ${item.caption}`}
       >
-        <span className="relative block overflow-hidden bg-mocha">
-          <RevealImage
-            image={item.image}
-            eager={index < 2}
-            className={ratio[item.span]}
-            imgClassName={
-              reduceMotion
-                ? ""
-                : "transition-transform duration-[1.2s] ease-[var(--ease-out-soft)] group-hover:scale-[1.035]"
-            }
-          />
+        <span
+          className="relative block overflow-hidden bg-mocha"
+          style={{ aspectRatio: item.aspectRatio ?? layoutAspect[item.layout] }}
+        >
+          {imageFailed ? (
+            <span className="absolute inset-0 flex items-center justify-center bg-mocha px-5 text-center text-sm text-ivory/60">
+              {item.caption}
+            </span>
+          ) : (
+            <RevealImage
+              image={item.image}
+              eager={index < 2}
+              onError={() => setImageFailed(true)}
+              className="h-full w-full"
+              imgClassName={
+                reduceMotion
+                  ? ""
+                  : "transition-transform duration-[1.2s] ease-[var(--ease-out-soft)] group-hover:scale-[1.035]"
+              }
+            />
+          )}
           {!reduceMotion && (
             <span
               aria-hidden="true"
@@ -77,10 +137,7 @@ function GalleryPhoto({
           </span>
           <span className="label shrink-0 text-xs text-ivory/55">
             {
-              String(index + 1).padStart(
-                2,
-                "0",
-              ) /* taste-skill-ignore: retain the existing gallery frame number */
+              String(item.number).padStart(2, "0")
             }
           </span>
         </span>
@@ -140,7 +197,9 @@ export function GallerySection() {
         </div>
       </div>
 
-      {pinned ? (
+      {gallery.length === 0 ? (
+        <p className="container-x mt-8 text-ivory/70">Gallery photographs will appear here soon.</p>
+      ) : pinned ? (
         <div
           ref={sceneRef}
           className="relative mt-8 sm:mt-12"
@@ -159,15 +218,15 @@ export function GallerySection() {
               }}
               className="flex w-max flex-none list-none items-center gap-1.5"
             >
-              {desktopColumns.map((column, columnIndex) => (
+              {desktopColumns.map((column) => (
                 <li
-                  key={column[0].item.image.src}
-                  className={`${desktopColumnWidths[columnIndex % desktopColumnWidths.length]} flex-none`}
+                  key={column.id}
+                  className="flex-none"
                 >
                   <ul className="flex list-none flex-col gap-1.5">
-                    {column.map(({ item, index: photoIndex }) => (
+                    {column.items.map(({ item, index: photoIndex }) => (
                       <GalleryPhoto
-                        key={item.image.src}
+                        key={item.id}
                         item={item}
                         index={photoIndex}
                         onOpen={() => setIndex(photoIndex)}
@@ -185,7 +244,7 @@ export function GallerySection() {
         <ul className="container-x mt-8 columns-2 gap-x-2 sm:mt-10 sm:gap-x-3 lg:columns-2 lg:gap-x-8">
           {gallery.map((item, i) => (
             <GalleryPhoto
-              key={item.image.src}
+              key={item.id}
               item={item}
               index={i}
               onOpen={() => setIndex(i)}

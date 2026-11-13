@@ -1,89 +1,212 @@
-import { images, type ImageAsset } from './images'
+import {
+  numberedGalleryAssets,
+  type NumberedGalleryAsset,
+} from 'virtual:cafe-in-gallery-assets'
+import type { ImageAsset } from './images'
 
-export interface GalleryItem {
-  image: ImageAsset
-  caption: string
-  /** Layout slot in the asymmetric grid */
-  span: 'tall' | 'wide' | 'square'
+export type GalleryLayout =
+  | 'large-portrait'
+  | 'small-portrait'
+  | 'large-landscape'
+  | 'small-landscape'
+  | 'square'
+  | 'tall-vertical'
+  | 'wide-horizontal'
+
+export interface GalleryPlacement {
+  /** One-based desktop column. */
+  column: number
+  /** One-based position within the column. */
+  row: number
 }
 
-export const gallery: GalleryItem[] = [
-  { image: images.diningRoom, caption: 'The dining room', span: 'wide' },
-  { image: images.lantern, caption: 'Lantern light', span: 'tall' },
-  { image: images.biscoffCheesecake, caption: 'Biscoff cheesecake', span: 'tall' },
-  { image: images.muralWall, caption: 'The botanical wall', span: 'wide' },
-  { image: images.buddha, caption: 'Quiet corners', span: 'tall' },
-  { image: images.alfredoPenne, caption: 'Penne & a black coffee', span: 'wide' },
-  {
-    image: {
-      src: '/images/dish-burger.webp',
-      alt: 'A toasted burger layered with a patty, cucumber and greens',
-      width: 410,
-      height: 900,
-    },
-    caption: 'A toasted burger with fresh greens',
-    span: 'tall',
+export interface GalleryItem {
+  id: string
+  image: ImageAsset
+  caption: string
+  /** Source image number, also used for the small frame marker. */
+  number: number
+  /** Gallery/lightbox order. */
+  order: number
+  layout: GalleryLayout
+  placement?: GalleryPlacement
+  /** Optional CSS aspect-ratio value such as "4 / 3". */
+  aspectRatio?: string
+}
+
+type GalleryOverride = Partial<
+  Pick<GalleryItem, 'caption' | 'number' | 'order' | 'layout' | 'placement' | 'aspectRatio'>
+> & {
+  alt?: string
+  objectPosition?: string
+}
+
+/**
+ * Editorial overrides live here, separate from rendering. Unlisted photos are
+ * discovered from public/images/gallery and arranged in numeric order.
+ */
+const overrides: Partial<Record<number, GalleryOverride>> = {
+  1: {
+    caption: 'Cafe In at the entrance',
+    alt: 'Cafe In name displayed on a sign at the entrance',
+    layout: 'wide-horizontal',
+    placement: { column: 1, row: 1 },
   },
-  { image: images.greekSalad, caption: 'A bowl of Greek salad', span: 'wide' },
-  {
-    image: images.mushroomSpaghetti,
-    caption: 'Mushroom spaghetti',
-    span: 'tall',
+  2: {
+    caption: 'A Cafe In takeaway cup',
+    alt: 'Cafe In takeaway cup held outside the cafe',
+    layout: 'small-portrait',
   },
-  { image: images.pistachioLatte, caption: 'A pistachio iced latte', span: 'tall' },
-  { image: images.icedAmericano, caption: 'Iced coffee by the window', span: 'tall' },
-  { image: images.icedLatte, caption: 'A layered iced latte', span: 'tall' },
-  { image: images.aglioOlio, caption: 'Pasta and iced coffee', span: 'tall' },
-  { image: images.exteriorNight, caption: 'Cafe In after dusk', span: 'wide' },
-  { image: images.diningAtmosphere, caption: 'Friends around the table', span: 'wide' },
-  {
-    image: {
-      src: '/images/optimized/IMG_20260809_215809.webp',
-      alt: 'A salad served at a table beside the cafe’s golden Buddha statue',
-      width: 1864,
-      height: 4096,
-    },
-    caption: 'A meal in a quiet corner',
-    span: 'tall',
+  3: {
+    caption: 'Coffee to take along',
+    alt: 'Cafe In takeaway cup held among the greenery',
+    layout: 'small-portrait',
   },
-  {
-    image: {
-      src: '/images/optimized/IMG_20260813_192951.webp',
-      alt: 'A dark layered iced drink on a wooden table with soft floral details behind it',
-      width: 1864,
-      height: 4096,
-    },
-    caption: 'A layered iced coffee',
-    span: 'tall',
+  4: {
+    caption: 'A table under the lanterns',
+    alt: 'Wooden cafe table and green seating beneath warm pendant lights',
+    layout: 'large-landscape',
   },
-  {
-    image: {
-      src: '/images/optimized/IMG_20260905_202926.webp',
-      alt: 'A frothy orange drink served in a handled glass mug',
-      width: 1864,
-      height: 4096,
-    },
-    caption: 'A frothy citrus drink',
-    span: 'tall',
+  5: {
+    caption: 'The dining room',
+    alt: 'Cafe In dining tables arranged beside the windows',
+    layout: 'large-landscape',
   },
-  {
-    image: {
-      src: '/images/optimized/IMG_20260906_205200.webp',
-      alt: 'A pale green and pink iced drink on a wooden table',
-      width: 1864,
-      height: 4096,
-    },
-    caption: 'A two-tone iced drink',
-    span: 'tall',
+  7: {
+    caption: 'Lantern light',
+    alt: 'A geometric pendant lantern glowing inside Cafe In',
+    layout: 'tall-vertical',
+    placement: { column: 2, row: 1 },
   },
-  {
-    image: {
-      src: '/images/optimized/IMG_20260928_194712.webp',
-      alt: 'A chilled layered drink with a softly lit cafe interior behind it',
-      width: 1864,
-      height: 4096,
-    },
-    caption: 'A drink in the evening light',
-    span: 'tall',
+  8: {
+    caption: 'The botanical wall',
+    alt: 'Cafe In botanical mural, emerald wall panels and pendant lights',
+    layout: 'wide-horizontal',
+    placement: { column: 2, row: 2 },
+    objectPosition: 'center 45%',
   },
+  9: {
+    caption: 'A closer look at the lantern',
+    alt: 'Close-up of a glowing geometric pendant lantern',
+    layout: 'large-portrait',
+  },
+  10: {
+    caption: 'Around the table',
+    alt: 'Guests sharing a meal at Cafe In',
+    layout: 'large-landscape',
+  },
+  11: {
+    caption: 'Coffee at the table',
+    alt: 'A cup of coffee on a wooden Cafe In table',
+    layout: 'square',
+  },
+  12: {
+    caption: 'Behind the counter',
+    alt: 'Coffee preparation equipment at the Cafe In counter',
+    layout: 'small-portrait',
+  },
+  13: {
+    caption: 'A quiet corner',
+    alt: 'Golden Buddha decor beside flowers inside Cafe In',
+    layout: 'small-portrait',
+  },
+  14: {
+    caption: 'A cup by the window',
+    alt: 'A cup of coffee beside a Cafe In window',
+    layout: 'small-landscape',
+  },
+  15: {
+    caption: 'Brownie and ice cream',
+    alt: 'Chocolate brownie served with a scoop of ice cream',
+    layout: 'small-portrait',
+  },
+  16: {
+    caption: 'Fresh greens',
+    alt: 'A fresh green salad served on a plate',
+    layout: 'square',
+  },
+  17: {
+    caption: 'A table set for sharing',
+    alt: 'A selection of cafe dishes and drinks on a table',
+    layout: 'large-landscape',
+  },
+  18: {
+    caption: 'Something to share',
+    alt: 'A dessert platter served at Cafe In',
+    layout: 'large-landscape',
+  },
+  19: {
+    caption: 'A chocolate dessert',
+    alt: 'A chocolate dessert on a plate',
+    layout: 'square',
+  },
+  20: {
+    caption: 'Latte art',
+    alt: 'Latte art on a coffee served at Cafe In',
+    layout: 'small-portrait',
+  },
+  22: {
+    caption: 'Creamy Tuscan pasta',
+    alt: 'Cafe In creamy Tuscan pasta feature image',
+    layout: 'tall-vertical',
+  },
+  23: {
+    caption: 'A chilled coffee',
+    alt: 'A glass of iced coffee beside the Cafe In window',
+    layout: 'small-portrait',
+  },
+  24: {
+    caption: 'A cool citrus pour',
+    alt: 'A golden iced drink being poured into a glass',
+    layout: 'small-portrait',
+  },
+  25: {
+    caption: 'Pasta and coffee',
+    alt: 'A pasta dish and cup of coffee on a wooden table',
+    layout: 'large-landscape',
+  },
+  26: {
+    caption: 'A fresh pour',
+    alt: 'Coffee being poured into a cup',
+    layout: 'wide-horizontal',
+  },
+  27: {
+    caption: 'Cheesecake on the table',
+    alt: 'A slice of cheesecake on a blue plate',
+    layout: 'large-portrait',
+  },
+}
+
+const automaticLayouts: GalleryLayout[] = [
+  'small-landscape',
+  'small-portrait',
+  'square',
+  'large-landscape',
+  'small-portrait',
+  'tall-vertical',
 ]
+
+function toGalleryItem(asset: NumberedGalleryAsset): GalleryItem {
+  const override = overrides[asset.number]
+  const { objectPosition, ...itemOverride } = override ?? {}
+  return {
+    id: `gallery-${asset.number}`,
+    image: {
+      src: asset.src,
+      alt: itemOverride.alt ?? `Cafe In photograph ${asset.number}`,
+      width: asset.width,
+      height: asset.height,
+      focus: objectPosition,
+    },
+    caption: itemOverride.caption ?? `Cafe In moment ${asset.number}`,
+    number: itemOverride.number ?? asset.number,
+    order: itemOverride.order ?? asset.number,
+    layout: itemOverride.layout ?? automaticLayouts[(asset.number - 1) % automaticLayouts.length],
+    placement: itemOverride.placement,
+    aspectRatio: itemOverride.aspectRatio,
+  }
+}
+
+export const gallery: GalleryItem[] = numberedGalleryAssets
+  .map(toGalleryItem)
+  .sort((left, right) => left.order - right.order || left.number - right.number)

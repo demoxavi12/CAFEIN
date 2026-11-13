@@ -10,22 +10,14 @@ const sourceFiles = {
   'Screenshot_20260830_180741.webp': 'Screenshot_20260830_180741.jpg.jpeg',
   'Screenshot_20260830_180745.webp': 'Screenshot_20260830_180745.jpg.jpeg',
   'IMG-20260804-WA0026(1).webp': 'IMG-20260804-WA0026(1).jpg.jpeg',
-  'IMG_20260809_215809.webp': 'IMG_20260809_215809.jpg.jpeg',
-  'IMG_20260813_192951.webp': 'IMG_20260813_192951.jpg.jpeg',
-  'IMG_20260905_202926.webp': 'IMG_20260905_202926.jpg.jpeg',
-  'IMG_20260906_205200.webp': 'IMG_20260906_205200.jpg.jpeg',
-  'IMG_20260928_194712.webp': 'IMG_20260928_194712.jpg.jpeg',
 }
 
-test('intro and gallery optimized photo references resolve to WebP assets', async () => {
-  const [intro, gallery] = await Promise.all([
-    readFile(new URL('../components/IntroAnimation.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('./gallery.ts', import.meta.url), 'utf8'),
-  ])
-  const references = [...`${intro}\n${gallery}`.matchAll(/['"]\/images\/optimized\/([^'"]+\.webp)['"]/g)]
+test('intro optimized photo references resolve to WebP assets', async () => {
+  const intro = await readFile(new URL('../components/IntroAnimation.tsx', import.meta.url), 'utf8')
+  const references = [...intro.matchAll(/['"]\/images\/optimized\/([^'"]+\.webp)['"]/g)]
     .map((match) => match[1])
 
-  assert.equal(new Set(references).size, references.length, 'each optimized source is referenced once')
+  assert.equal(new Set(references).size, references.length, 'each optimized intro source is referenced once')
   assert.deepEqual([...references].sort(), Object.keys(sourceFiles).sort())
 
   let originalBytes = 0
@@ -43,6 +35,19 @@ test('intro and gallery optimized photo references resolve to WebP assets', asyn
   }
 
   assert.ok(optimizedBytes < originalBytes * 0.1, 'optimized transfer payload is under 10% of the original photos')
+})
+
+test('Gallery discovers its numbered WebP collection from the public gallery directory', async () => {
+  const [galleryData, viteConfig, assetsHelper] = await Promise.all([
+    readFile(new URL('./gallery.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../../vite.config.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../../scripts/gallery-assets.mjs', import.meta.url), 'utf8'),
+  ])
+
+  assert.match(viteConfig, /discoverNumberedGalleryWebp\(galleryDirectory\)/)
+  assert.match(assetsHelper, /readdirSync\(directory/)
+  assert.match(assetsHelper, /Number\.parseInt\(left, 10\) - Number\.parseInt\(right, 10\)/)
+  assert.match(galleryData, /numberedGalleryAssets[\s\S]*\.sort\(\(left, right\) => left\.order - right\.order/)
 })
 
 test('intro videos, responsive hero photos, and the official logo resolve to optimized assets', async () => {
